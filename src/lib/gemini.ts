@@ -24,9 +24,10 @@ export interface SearchResponse {
 }
 
 export async function scholarSearch(query: string): Promise<SearchResponse> {
-  if (!ai) throw new Error("GEMINI_API_KEY is not configured. Please add it to your environment variables.");
-  const result = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+  if (!ai) throw new Error("Search disabled: GEMINI_API_KEY is not configured in Vercel/Deployment settings.");
+  try {
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
     contents: [
       {
         role: "user",
@@ -80,78 +81,89 @@ export async function scholarSearch(query: string): Promise<SearchResponse> {
     sources: uniqueSources,
     thinking: "Analytic mode engaged"
   };
+
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    throw new Error(error?.message || "Synthesizer failed to generate research. Please verify your API key and connection.");
+  }
 }
 
 export async function deepDive(source: SearchSource): Promise<string> {
-  if (!ai) throw new Error("GEMINI_API_KEY is not configured.");
-  const result = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: `Analyze the following source deeply: ${source.title} (${source.url}). 
-        Provide a comprehensive summary of its key arguments, methodology (if applicable), and its significance in its field. 
-        Also, extract metadata for citation: Full Title, Authors, Publication Date, and Publisher.` }]
+  if (!ai) throw new Error("Deep Analysis disabled: GEMINI_API_KEY is not configured.");
+  try {
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Analyze the following source deeply: ${source.title} (${source.url}). 
+          Provide a comprehensive summary of its key arguments, methodology (if applicable), and its significance in its field. 
+          Also, extract metadata for citation: Full Title, Authors, Publication Date, and Publisher.` }]
+        }
+      ],
+      config: {
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.HIGH
+        },
+        systemInstruction: "You are a research analyst. Use the provided URL to extract all relevant scholarly information. Be precise and academic in your summary.",
+        tools: [{ googleSearch: {} }] 
       }
-    ],
-    config: {
-      thinkingConfig: {
-        thinkingLevel: ThinkingLevel.HIGH
-      },
-      systemInstruction: "You are a research analyst. Use the provided URL to extract all relevant scholarly information. Be precise and academic in your summary.",
-      tools: [{ googleSearch: {} }] // Using search to find more info about the specific URL if needed
-    }
-  });
+    });
 
-  return result.text || "Could not perform deep analysis.";
+    return result.text || "Could not perform deep analysis.";
+  } catch (error: any) {
+    console.error("Deep Dive Error:", error);
+    throw new Error(`Analysis failed: ${error?.message || "Check your credentials."}`);
+  }
 }
 
 export async function synthesizeChat(context: string, message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[]): Promise<string> {
-  if (!ai) throw new Error("GEMINI_API_KEY is not configured.");
-  const result = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: `CONTEXT OF CURRENT RESEARCH: \n${context}\n\nUSER QUESTION: ${message}` }]
-      },
-      ...history
-    ],
-    config: {
-      systemInstruction: "You are an AI research assistant. You have access to the current research context. Help the user explore this research further, explain complex terms, or find connections. Be concise, scholarly, and helpful.",
-      tools: [{ googleSearch: {} }]
-    }
-  });
+  if (!ai) throw new Error("Chat disabled: GEMINI_API_KEY is not configured.");
+  try {
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `CONTEXT OF CURRENT RESEARCH: \n${context}\n\nUSER QUESTION: ${message}` }]
+        },
+        ...history
+      ],
+      config: {
+        systemInstruction: "You are an AI research assistant. You have access to the current research context. Help the user explore this research further, explain complex terms, or find connections. Be concise, scholarly, and helpful.",
+        tools: [{ googleSearch: {} }]
+      }
+    });
 
-  return result.text || "I'm sorry, I couldn't process that request.";
+    return result.text || "I'm sorry, I couldn't process that request.";
+  } catch (error: any) {
+    console.error("Context Chat Error:", error);
+    throw new Error(`Chat failed: ${error?.message || "Check your API connection."}`);
+  }
 }
 
 export async function advancedScholarChat(message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[]): Promise<string> {
-  if (!ai) throw new Error("GEMINI_API_KEY is not configured.");
-  const result = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: [
-      ...history,
-      { role: "user", parts: [{ text: message }] }
-    ],
-    config: {
-      systemInstruction: `You are the ScholarMind Pro Advanced AI, an elite academic research partner powered by Gemini 3.1 Pro. 
-      Your mission is to provide world-class scholarly analysis, data interpretation, and complex problem solving.
-      
-      CAPABILITIES:
-      - DEEP DATA ANALYSIS: You can interpret complex datasets, statistical findings, and methodology papers.
-      - ADVANCED CODING: Provide Python or R snippets for data visualization, statistical modeling (SPSS/STATA equivalents), and research automation.
-      - GROUNDED REASONING: Always use the integrated Google Search tool to find the absolute latest peer-reviewed research, pre-prints, and institutional data.
-      - ACADEMIC RIGOR: Maintain a professional, objective, and intellectually demanding tone. 
-      - SYNTHESIS: Connect disparate fields of study (interdisciplinary analysis).
-      
-      When asked for research, always perform multiple searches to find high-quality primary sources (.gov, .edu, .org). Avoid popular media summaries when academic sources are available.`,
-      tools: [{ googleSearch: {} }],
-      thinkingConfig: {
-        thinkingLevel: ThinkingLevel.HIGH
+  if (!ai) throw new Error("Advanced Chat disabled: GEMINI_API_KEY is not configured.");
+  try {
+    const result = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: [
+        ...history,
+        { role: "user", parts: [{ text: message }] }
+      ],
+      config: {
+        systemInstruction: `You are the ScholarMind Pro Advanced AI, an elite academic research partner. 
+        Your mission is to provide world-class scholarly analysis, data interpretation, and complex problem solving.`,
+        tools: [{ googleSearch: {} }],
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.HIGH
+        }
       }
-    }
-  });
+    });
 
-  return result.text || "Analysis failed. Please check your data connection.";
+    return result.text || "Analysis failed. Please check your data connection.";
+  } catch (error: any) {
+    console.error("Advanced Chat Error:", error);
+    throw new Error(`AI System error: ${error?.message || "Internal failure."}`);
+  }
 }

@@ -115,9 +115,9 @@ export default function App() {
       
       const data = await scholarSearch(query);
       setResult(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("An error occurred while performing research. Our neural engines are recalibrating.");
+      setError(err?.message || "An error occurred while performing research. Our neural engines are recalibrating.");
     } finally {
       setIsSearching(false);
     }
@@ -130,8 +130,8 @@ export default function App() {
     try {
       const res = await deepDive(source);
       setAnalysisResult(res);
-    } catch (err) {
-      setAnalysisResult("Failed to analyze source deeply.");
+    } catch (err: any) {
+      setAnalysisResult(`Error: ${err?.message || "Failed to analyze source deeply."}`);
     } finally {
       setIsAnalyzing(false);
     }
