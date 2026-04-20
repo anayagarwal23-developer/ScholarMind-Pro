@@ -356,7 +356,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-[#000000] text-black dark:text-white transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-white dark:bg-[#000000] text-black dark:text-white transition-colors duration-300 font-sans">
+      {!process.env.GEMINI_API_KEY && (
+        <div className="bg-red-500 text-white text-[10px] py-1.5 px-4 text-center font-black uppercase tracking-[0.2em] sticky top-0 z-[100] animate-pulse">
+          Critical: GEMINI_API_KEY Missing • Research functions disabled • Configure in Deployment Settings
+        </div>
+      )}
       <header className="px-6 h-16 flex items-center justify-between sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-apple-gray-100 dark:border-[#222]">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 cursor-pointer group" onClick={() => { setHasSearched(false); setView('search'); }}>

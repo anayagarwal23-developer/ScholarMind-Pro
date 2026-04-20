@@ -1,6 +1,15 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const getAI = () => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) {
+    console.warn("GEMINI_API_KEY is missing. Please set it in your environment variables.");
+    return null;
+  }
+  return new GoogleGenAI({ apiKey: key });
+};
+
+const ai = getAI();
 
 export interface SearchSource {
   title: string;
@@ -15,6 +24,7 @@ export interface SearchResponse {
 }
 
 export async function scholarSearch(query: string): Promise<SearchResponse> {
+  if (!ai) throw new Error("GEMINI_API_KEY is not configured. Please add it to your environment variables.");
   const result = await ai.models.generateContent({
     model: "gemini-3.1-pro-preview",
     contents: [
@@ -73,6 +83,7 @@ export async function scholarSearch(query: string): Promise<SearchResponse> {
 }
 
 export async function deepDive(source: SearchSource): Promise<string> {
+  if (!ai) throw new Error("GEMINI_API_KEY is not configured.");
   const result = await ai.models.generateContent({
     model: "gemini-3.1-pro-preview",
     contents: [
@@ -96,6 +107,7 @@ export async function deepDive(source: SearchSource): Promise<string> {
 }
 
 export async function synthesizeChat(context: string, message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[]): Promise<string> {
+  if (!ai) throw new Error("GEMINI_API_KEY is not configured.");
   const result = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: [
@@ -115,6 +127,7 @@ export async function synthesizeChat(context: string, message: string, history: 
 }
 
 export async function advancedScholarChat(message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[]): Promise<string> {
+  if (!ai) throw new Error("GEMINI_API_KEY is not configured.");
   const result = await ai.models.generateContent({
     model: "gemini-3.1-pro-preview",
     contents: [
