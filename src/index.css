@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-serif: "Georgia", "serif";
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-apple-gray-50: #F5F5F7;
+  --color-apple-gray-100: #E8E8ED;
+  --color-apple-gray-200: #D2D2D7;
+  --color-apple-gray-400: #86868B;
+  --color-apple-gray-500: #6E6E73;
+  --color-apple-gray-900: #1D1D1F;
+  --color-apple-blue: #0071E3;
+}
+
+@layer base {
+  body {
+    @apply bg-white dark:bg-black text-[#1d1d1f] dark:text-white font-sans antialiased selection:bg-apple-blue/10;
+  }
+}
+
+@layer components {
+  .ios-card {
+    @apply bg-white dark:bg-[#0a0a0a] border border-apple-gray-100 dark:border-[#222] rounded-[32px] shadow-[0_8px_40px_rgba(0,0,0,0.04)] dark:shadow-none transition-all hover:shadow-[0_12px_48px_rgba(0,0,0,0.08)];
+  }
+  
+  .ios-button-primary {
+    @apply bg-black dark:bg-white text-white dark:text-black rounded-full px-6 py-2.5 text-sm font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/10 dark:shadow-white/5;
+  }
+  
+  .ios-button-secondary {
+    @apply bg-apple-gray-50 dark:bg-[#111] text-apple-gray-500 dark:text-apple-gray-400 border border-apple-gray-100 dark:border-[#222] rounded-full px-6 py-2.5 text-sm font-bold hover:bg-apple-gray-100 dark:hover:bg-[#1a1a1a] active:scale-95 transition-all;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-apple-gray-100 dark:bg-[#222] rounded-full;
+  }
+}
