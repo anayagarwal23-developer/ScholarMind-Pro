@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User } from 'lucide-react';
+import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, ChevronLeft, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { scholarSearch, deepDive, synthesizeChat, advancedScholarChat, type SearchResponse, type SearchSource } from './lib/groq';
@@ -11,9 +11,13 @@ interface Project {
   createdAt: number;
 }
 
-interface SavedSource extends SearchSource {
+interface SavedResearch {
+  id: string;
+  title: string;
+  content: string;
   projectId: string;
   savedAt: number;
+  query: string;
 }
 
 export default function App() {
@@ -32,25 +36,11 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Projects and Saved Sources
+  // Projects and Saved Research
   const [projects, setProjects] = useState<Project[]>([]);
-  const [savedSources, setSavedSources] = useState<SavedSource[]>([]);
+  const [savedResearch, setSavedResearch] = useState<SavedResearch[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('all');
-  const [view, setView] = useState<'search' | 'library' | 'ai-chat'>('search');
-
-  // Deep Dive State
-  const [analyzingSource, setAnalyzingSource] = useState<SearchSource | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  // Synthesis Chat State
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'model', content: string }[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [isMessageLoading, setIsMessageLoading] = useState(false);
-
-  const [citationExportSources, setCitationExportSources] = useState<SearchSource[] | null>(null);
-  const [exportFormat, setExportFormat] = useState<'APA' | 'MLA' | 'Chicago'>('APA');
+  const [view, setView] = useState<'search' | 'library' | 'ai-chat' | 'essay-builder'>('search');
 
   // Advanced AI Chat State
   const [advChatMessages, setAdvChatMessages] = useState<{ role: 'user' | 'model', content: string }[]>([]);
@@ -59,25 +49,28 @@ export default function App() {
 
   const [isConfigured, setIsConfigured] = useState<boolean>(true);
 
-  useEffect(() => {
-    import('./lib/groq').then(lib => {
-      lib.checkConfig().then(configured => setIsConfigured(configured));
-    });
-  }, []);
+  // Essay Builder State
+  const [essayContent, setEssayContent] = useState('');
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [essayStep, setEssayStep] = useState<'topic' | 'structure' | 'draft'>('topic');
 
   // Persistence (Local Storage Only)
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
+    import('./lib/groq').then(lib => {
+      lib.checkConfig().then(configured => setIsConfigured(configured));
+    });
+
     try {
       const storedProjects = localStorage.getItem('sm_projects');
-      const storedSources = localStorage.getItem('sm_sources');
+      const storedResearch = localStorage.getItem('sm_research');
       const storedHistory = localStorage.getItem('sm_history');
       const storedTheme = localStorage.getItem('sm_theme');
       const storedProfile = localStorage.getItem('sm_profile');
 
       if (storedProjects) setProjects(JSON.parse(storedProjects));
-      if (storedSources) setSavedSources(JSON.parse(storedSources));
+      if (storedResearch) setSavedResearch(JSON.parse(storedResearch));
       if (storedHistory) setSearchHistory(JSON.parse(storedHistory));
       if (storedTheme) setTheme(storedTheme as 'light' | 'dark');
       if (storedProfile) setProfile(JSON.parse(storedProfile));
@@ -93,12 +86,12 @@ export default function App() {
     if (!isInitialized) return;
     
     localStorage.setItem('sm_projects', JSON.stringify(projects));
-    localStorage.setItem('sm_sources', JSON.stringify(savedSources));
+    localStorage.setItem('sm_research', JSON.stringify(savedResearch));
     localStorage.setItem('sm_history', JSON.stringify(searchHistory));
     localStorage.setItem('sm_theme', theme);
     if (profile) localStorage.setItem('sm_profile', JSON.stringify(profile));
     else localStorage.removeItem('sm_profile');
-  }, [projects, savedSources, searchHistory, theme, profile, isInitialized]);
+  }, [projects, savedResearch, searchHistory, theme, profile, isInitialized]);
 
   // Dark Mode Class
   useEffect(() => {
@@ -139,130 +132,33 @@ export default function App() {
     }
   };
 
-  const handleDeepDive = async (source: SearchSource) => {
-    setAnalyzingSource(source);
-    setIsAnalyzing(true);
-    setAnalysisResult(null);
-    try {
-      const res = await deepDive(source);
-      setAnalysisResult(res);
-    } catch (err: any) {
-      let msg = "Failed to analyze source deeply.";
-      if (err?.message?.includes('429')) {
-        msg = "Deep Dive engines are resting (Rate Limit). Please wait a moment.";
-      }
-      setAnalysisResult(`Error: ${msg}`);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const saveSource = (source: SearchSource) => {
-    const sourceData: SavedSource = {
-      ...source,
-      projectId: activeProjectId === 'all' ? 'default' : activeProjectId,
+  const handleSaveResearch = (title: string, content: string) => {
+    const newResearch: SavedResearch = {
+      id: Math.random().toString(36).substring(7),
+      title,
+      content,
+      query: query || "General Research",
+      projectId: activeProjectId === 'all' ? (projects[0]?.id || 'inbox') : activeProjectId,
       savedAt: Date.now()
     };
+    setSavedResearch(prev => [newResearch, ...prev]);
+    alert("Research snapshot saved to your Library.");
+  };
 
-    if (!savedSources.find(s => s.url === source.url)) {
-      setSavedSources([...savedSources, sourceData]);
+  const handleRemoveResearch = (id: string) => {
+    setSavedResearch(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleCreateProject = () => {
+    const name = prompt("Project Name?");
+    if (name) {
+      const newProject: Project = {
+        id: Math.random().toString(36).substring(7),
+        name,
+        createdAt: Date.now()
+      };
+      setProjects([...projects, newProject]);
     }
-  };
-
-  const formatCitation = (source: SavedSource, format: 'APA' | 'MLA' | 'Chicago') => {
-    const domain = new URL(source.url).hostname;
-    const year = new Date(source.savedAt).getFullYear();
-    const title = source.title;
-    
-    switch (format) {
-      case 'APA':
-        return `${domain}. (${year}). ${title}. Retrieved from ${source.url}`;
-      case 'MLA':
-        return `"${title}." ${domain}, ${year}, ${source.url}.`;
-      case 'Chicago':
-        return `${domain}. "${title}." Last modified ${year}. ${source.url}.`;
-      default:
-        return source.url;
-    }
-  };
-
-  const downloadCitations = (format: 'APA' | 'MLA' | 'Chicago') => {
-    const filtered = activeProjectId === 'all' 
-      ? savedSources 
-      : savedSources.filter(s => s.projectId === activeProjectId);
-    
-    const text = filtered.map(s => formatCitation(s, format)).join('\n\n');
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `scholar_citations_${format.toLowerCase()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const generateEssay = async () => {
-    const filtered = activeProjectId === 'all' 
-      ? savedSources 
-      : savedSources.filter(s => s.projectId === activeProjectId);
-    
-    if (filtered.length === 0) {
-      alert("Please save some sources first to generate an essay.");
-      return;
-    }
-
-    setAnalyzingSource({ title: "Drafting Scholarly Essay", url: "internal://essay-draft" });
-    setIsAnalyzing(true);
-    setAnalysisResult(null);
-
-    const sourcesContext = filtered.map((s, i) => `[${i+1}] ${s.title} (${s.url})`).join('\n');
-    
-    try {
-      const res = await deepDive({ 
-        title: "Scholarly Essay Synthesis", 
-        url: `Drafting based on ${filtered.length} sources: \n${sourcesContext}` 
-      });
-      setAnalysisResult(res);
-    } catch (err) {
-      setAnalysisResult("Failed to generate essay.");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || !result) return;
-
-    const userMsg = chatInput;
-    setChatMessages([...chatMessages, { role: 'user', content: userMsg }]);
-    setChatInput('');
-    setIsMessageLoading(true);
-
-    try {
-      const history = chatMessages.map(m => ({ 
-        role: m.role, 
-        parts: [{ text: m.content }] 
-      }));
-      const response = await synthesizeChat(result.answer, userMsg, history);
-      setChatMessages(prev => [...prev, { role: 'model', content: response }]);
-    } catch (err) {
-      setChatMessages(prev => [...prev, { role: 'model', content: "Research link failed. Please retry." }]);
-    } finally {
-      setIsMessageLoading(false);
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert("Citations copied to clipboard.");
-  };
-
-  const handleCiteAll = (sources: SearchSource[]) => {
-    // Also save them automatically for the user
-    sources.forEach(s => saveSource(s));
-    setCitationExportSources(sources);
   };
 
   const handleAdvChat = async (e: React.FormEvent) => {
@@ -333,7 +229,7 @@ export default function App() {
   const exportWorkspace = () => {
     const data = {
       projects,
-      savedSources,
+      savedResearch,
       searchHistory,
       theme,
       profile,
@@ -357,9 +253,9 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.projects && data.savedSources) {
+        if (data.projects && data.savedResearch) {
           setProjects(data.projects);
-          setSavedSources(data.savedSources);
+          setSavedResearch(data.savedResearch);
           setSearchHistory(data.searchHistory || []);
           setTheme(data.theme || 'light');
           setProfile(data.profile || null);
@@ -443,16 +339,24 @@ export default function App() {
             {profile ? (
               <button 
                 onClick={() => setIsSettingsOpen(true)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg transition-transform active:scale-95 overflow-hidden"
-                style={{ backgroundColor: profile.avatarColor }}
+                className="group relative flex items-center gap-2 pr-1 pl-3 py-1 bg-apple-gray-50 dark:bg-[#111] hover:bg-apple-gray-100 dark:hover:bg-[#1a1a1a] rounded-full transition-all active:scale-95 border border-apple-gray-100 dark:border-[#222]"
               >
-                {profile.name.charAt(0).toUpperCase()}
+                <span className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400 group-hover:text-black dark:group-hover:text-white transition-colors">
+                  {profile.name.split(' ')[0]}
+                </span>
+                <div 
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-sm ring-2 ring-white dark:ring-black translate-x-0.5"
+                  style={{ backgroundColor: profile.avatarColor }}
+                >
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
               </button>
             ) : (
               <button 
                 onClick={() => setIsProfileModalOpen(true)}
-                className="text-[11px] font-black uppercase tracking-widest bg-apple-blue text-white px-4 py-2 rounded-xl transition-all active:scale-95"
+                className="group flex items-center gap-2 bg-black dark:bg-white text-white dark:text-black px-5 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-xl shadow-black/10"
               >
+                <User className="w-4 h-4" />
                 Sign In
               </button>
             )}
@@ -468,17 +372,17 @@ export default function App() {
               className="absolute top-20 right-6 w-72 ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-6 shadow-2xl z-[100]"
             >
               <div className="space-y-6">
-                {profile && (
-                  <div className="flex items-center gap-3 pb-4 border-b border-apple-gray-50 dark:border-[#222]">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-black text-white" style={{ backgroundColor: profile.avatarColor }}>
-                      {profile.name.charAt(0).toUpperCase()}
+                  {profile && (
+                    <div className="flex items-center gap-4 px-2 py-1">
+                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white shadow-xl rotate-3" style={{ backgroundColor: profile.avatarColor }}>
+                        {profile.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-base font-black truncate text-black dark:text-white leading-tight">{profile.name}</p>
+                        <p className="text-[10px] text-apple-gray-400 font-bold uppercase tracking-widest truncate">{profile.institution || 'Independent Researcher'}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-black truncate">{profile.name}</p>
-                      <p className="text-[10px] text-apple-gray-400 font-bold uppercase tracking-widest truncate">{profile.institution}</p>
-                    </div>
-                  </div>
-                )}
+                  )}
                 
                 <div className="space-y-4">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-apple-gray-400">Environment</h3>
@@ -530,19 +434,19 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-apple-gray-100 dark:border-[#222] flex flex-col gap-3">
-                  <div className="text-[9px] text-apple-gray-400 font-extrabold uppercase tracking-[0.25em] leading-relaxed text-center">
-                    ScholarMind Research <br /> Final Release 1.2.0
-                  </div>
+                <div className="pt-4 border-t border-apple-gray-100 dark:border-[#222] space-y-3">
                   {profile && (
                     <button 
-                      type="button"
-                      onClick={handleLogout}
-                      className="text-[11px] font-black uppercase tracking-[0.1em] text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 py-3 rounded-2xl transition-all active:scale-95 border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
+                      onClick={() => { setProfile(null); setIsSettingsOpen(false); }}
+                      className="w-full flex items-center justify-center gap-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
                     >
-                      Deactivate Identity
+                      <LogOut className="w-3.5 h-3.5" />
+                      De-authorize Workspace
                     </button>
                   )}
+                  <div className="text-[9px] text-apple-gray-400 font-extrabold uppercase tracking-[0.25em] leading-relaxed text-center opacity-40">
+                    ScholarMind Pro <br /> Local Workspace 1.4.0
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -618,7 +522,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col items-center"
+              className="flex-1 flex flex-col items-center overflow-y-auto"
             >
               {!hasSearched ? (
                 <Hero onSearch={handleSearch} query={query} setQuery={setQuery} onOpenAiChat={() => setView('ai-chat')} />
@@ -627,260 +531,37 @@ export default function App() {
                   isSearching={isSearching} 
                   result={result} 
                   error={error} 
-                  onSave={saveSource}
-                  onDeepDive={handleDeepDive}
-                  onOpenChat={() => setIsChatOpen(true)}
-                  onCiteAll={handleCiteAll}
+                  onSaveSnapshot={() => result && handleSaveResearch(`Research: ${query}`, result.answer)}
+                  onBack={() => setHasSearched(false)}
                 />
               )}
             </motion.div>
-          ) : view === 'ai-chat' ? (
-            <motion.div 
-              key="ai-chat-view"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex-1 flex flex-col items-center bg-apple-gray-50/30"
-            >
-              <AdvancedChatView 
-                messages={advChatMessages}
-                input={advChatInput}
-                setInput={setAdvChatInput}
-                onSend={handleAdvChat}
-                isLoading={isAdvLoading}
-              />
-            </motion.div>
+          ) : view === 'library' ? (
+            <LibraryView 
+              projects={projects}
+              savedResearch={savedResearch}
+              activeProject={activeProjectId}
+              setActiveProject={setActiveProjectId}
+              onRemoveResearch={handleRemoveResearch}
+              onCreateProject={handleCreateProject}
+              onOpenEssayBuilder={() => setView('essay-builder')}
+            />
+          ) : view === 'essay-builder' ? (
+            <EssayBuilderView 
+              researchItems={savedResearch}
+              content={essayContent}
+              setContent={setEssayContent}
+              isDrafting={isDrafting}
+              setIsDrafting={setIsDrafting}
+            />
           ) : (
-            <motion.div 
-              key="library-view"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="flex-1 p-8 max-w-7xl mx-auto w-full"
-            >
-              <LibraryView 
-                profile={profile}
-                projects={projects} 
-                savedSources={savedSources} 
-                onCreateProject={createProject}
-                onDownload={downloadCitations}
-                onGenerateEssay={generateEssay}
-                activeProject={activeProjectId}
-                setActiveProject={setActiveProjectId}
-                onRemoveSource={(url) => setSavedSources(savedSources.filter(s => s.url !== url))}
-                formatCitation={formatCitation}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Citation Export Overlay */}
-        <AnimatePresence>
-          {citationExportSources && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md"
-            >
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-2xl bg-white rounded-[32px] shadow-2xl flex flex-col overflow-hidden max-h-[80vh]"
-              >
-                <div className="p-8 border-b border-apple-gray-100 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-black tracking-tight">Generate Citations</h2>
-                    <p className="text-sm text-apple-gray-400 font-medium">Select a format and copy your bibliography.</p>
-                  </div>
-                  <button onClick={() => setCitationExportSources(null)} className="p-2 hover:bg-apple-gray-50 rounded-full transition-colors">
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-8 space-y-6">
-                  <div className="flex gap-2">
-                    {(['APA', 'MLA', 'Chicago'] as const).map(f => (
-                      <button 
-                        key={f}
-                        onClick={() => setExportFormat(f)}
-                        className={cn("px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all", 
-                          exportFormat === f ? "bg-apple-blue text-white shadow-lg shadow-apple-blue/20" : "bg-apple-gray-50 text-apple-gray-400 hover:bg-apple-gray-100")}
-                      >
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-apple-gray-50 p-6 rounded-[24px] border border-apple-gray-100 font-mono text-sm leading-relaxed whitespace-pre-wrap select-all">
-                    {citationExportSources.map(s => {
-                      const pseudoSaved: SavedSource = { ...s, savedAt: Date.now(), projectId: 'temp' };
-                      return formatCitation(pseudoSaved, exportFormat);
-                    }).join('\n\n')}
-                  </div>
-                </div>
-
-                <div className="p-8 bg-apple-gray-50/50 border-t border-apple-gray-100 flex justify-end gap-3">
-                  <button 
-                    onClick={() => {
-                      const text = citationExportSources.map(s => {
-                        const pseudoSaved: SavedSource = { ...s, savedAt: Date.now(), projectId: 'temp' };
-                        return formatCitation(pseudoSaved, exportFormat);
-                      }).join('\n\n');
-                      copyToClipboard(text);
-                    }}
-                    className="ios-button-primary flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Copy All to Clipboard
-                  </button>
-                  <button onClick={() => setCitationExportSources(null)} className="ios-button-secondary">Done</button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Synthesis Mode Chat Overlay */}
-        <AnimatePresence>
-          {isChatOpen && (
-            <motion.div 
-              initial={{ opacity: 0, x: 100 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 100 }}
-              className="fixed top-16 right-0 bottom-0 w-full max-w-md bg-white border-l border-apple-gray-100 shadow-2xl flex flex-col z-[50]"
-            >
-              <div className="p-6 border-b border-apple-gray-100 flex items-center justify-between bg-apple-gray-50/50 backdrop-blur-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm">Synthesis Chat</h3>
-                    <p className="text-[10px] text-apple-gray-400 uppercase tracking-widest font-black">Interactive Analysis</p>
-                  </div>
-                </div>
-                <button onClick={() => setIsChatOpen(false)} className="p-2 hover:bg-apple-gray-100 rounded-full transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col items-start bg-gradient-to-b from-white to-apple-gray-50/30">
-                {chatMessages.length === 0 && (
-                  <div className="w-full text-center py-12 space-y-4">
-                    <p className="text-apple-gray-400 text-sm font-medium">Research analysis active. <br />What would you like to explore?</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {['Summarize key points', 'Find contradictions', 'Explain methodology'].map(t => (
-                        <button 
-                          key={t}
-                          onClick={() => { setChatInput(t); }}
-                          className="text-[10px] font-bold bg-white border border-apple-gray-100 px-3 py-1.5 rounded-full hover:border-apple-blue transition-colors"
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {chatMessages.map((msg, i) => (
-                  <div 
-                    key={i} 
-                    className={cn("max-w-[85%] p-4 rounded-[20px] text-sm leading-relaxed", 
-                      msg.role === 'user' 
-                        ? "bg-apple-blue text-white ml-auto rounded-tr-none" 
-                        : "bg-white border border-apple-gray-100 text-[#1d1d1f] shadow-sm rounded-tl-none")}
-                  >
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
-                  </div>
-                ))}
-                {isMessageLoading && (
-                  <div className="flex items-center gap-2 text-apple-gray-400 animate-pulse bg-white border border-apple-gray-100 p-4 rounded-[20px] rounded-tl-none">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Analyzing context...</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 bg-white border-t border-apple-gray-100">
-                <form onSubmit={handleSendMessage} className="relative group">
-                  <input 
-                    type="text" 
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask about this research..."
-                    className="w-full bg-apple-gray-50 border-none rounded-2xl py-4 pl-4 pr-12 text-sm outline-none focus:ring-2 focus:ring-apple-blue/10 transition-all group-hover:bg-apple-gray-100"
-                  />
-                  <button 
-                    disabled={!chatInput.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black text-white rounded-xl disabled:opacity-30 transition-all hover:scale-105 active:scale-95"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </form>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Deep Analysis Overlay */}
-        <AnimatePresence>
-          {analyzingSource && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/20 backdrop-blur-sm">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white w-full max-w-3xl h-[80vh] rounded-[32px] shadow-2xl flex flex-col overflow-hidden border border-apple-gray-100"
-              >
-                <div className="p-6 border-b border-apple-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Sparkles className="text-apple-blue w-6 h-6" />
-                    <div>
-                      <h3 className="font-bold text-lg">AI Deep Analysis</h3>
-                      <p className="text-xs text-apple-gray-400 truncate max-w-[400px]">{analyzingSource.title}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => setAnalyzingSource(null)} className="p-2 hover:bg-apple-gray-50 rounded-full transition-colors">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                <div className="flex-1 p-8 overflow-y-auto">
-                  {isAnalyzing ? (
-                    <div className="h-full flex flex-col items-center justify-center space-y-6">
-                      <Loader2 className="w-12 h-12 animate-spin text-apple-blue" />
-                      <div className="text-center space-y-2">
-                        <p className="font-medium">Contextualizing source data...</p>
-                        <p className="text-sm text-apple-gray-400">Groq is synthesizing high-speed research vectors.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <motion.div 
-                      initial={{ opacity: 0 }} 
-                      animate={{ opacity: 1 }}
-                      className="prose prose-neutral max-w-none"
-                    >
-                      <ReactMarkdown>{analysisResult || ''}</ReactMarkdown>
-                    </motion.div>
-                  )}
-                </div>
-
-                <div className="p-6 bg-apple-gray-50 border-t border-apple-gray-100 flex justify-end gap-3">
-                  <button 
-                    onClick={() => { saveSource(analyzingSource); setAnalyzingSource(null); }}
-                    className="ios-button-secondary border border-apple-gray-200"
-                  >
-                    Save for Reference
-                  </button>
-                  <button 
-                    onClick={() => setAnalyzingSource(null)}
-                    className="ios-button-primary"
-                  >
-                    Close Analysis
-                  </button>
-                </div>
-              </motion.div>
-            </div>
+            <AdvancedChatView 
+              messages={advChatMessages}
+              input={advChatInput}
+              setInput={setAdvChatInput}
+              isLoading={isAdvLoading}
+              onSend={handleAdvChat}
+            />
           )}
         </AnimatePresence>
       </main>
@@ -970,244 +651,271 @@ function Hero({ onSearch, query, setQuery, onOpenAiChat }: { onSearch: (e: React
   );
 }
 
-function SearchResults({ isSearching, result, error, onSave, onDeepDive, onOpenChat, onCiteAll }: { isSearching: boolean, result: SearchResponse | null, error: string | null, onSave: (s: SearchSource) => void, onDeepDive: (s: SearchSource) => void, onOpenChat: () => void, onCiteAll: (sources: SearchSource[]) => void }) {
+function SearchResults({ isSearching, result, error, onSaveSnapshot, onBack }: { isSearching: boolean, result: SearchResponse | null, error: string | null, onSaveSnapshot: () => void, onBack: () => void }) {
   return (
-    <div className="w-full max-w-5xl px-8 py-12 grid grid-cols-1 md:grid-cols-[1fr_320px] gap-12">
-      <div className="min-w-0">
-        <AnimatePresence mode="wait">
-          {isSearching ? (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-10"
-            >
-              <div className="flex items-center gap-4 text-apple-blue font-bold tracking-tight text-3xl">
-                <Loader2 className="w-8 h-8 animate-spin" />
-                Synthesizing...
-              </div>
-              <div className="space-y-6">
-                <div className="h-4 bg-apple-gray-50 rounded-full w-3/4 animate-pulse" />
-                <div className="h-4 bg-apple-gray-50 rounded-full w-full animate-pulse" />
-                <div className="h-4 bg-apple-gray-50 rounded-full w-5/6 animate-pulse" />
-                <div className="h-4 bg-apple-gray-50 rounded-full w-2/3 animate-pulse" />
-              </div>
-            </motion.div>
-          ) : error ? (
-            <div className="p-8 ios-card bg-red-50/30 border-red-100 text-red-600 font-medium">
-              {error}
+    <div className="w-full max-w-4xl px-8 py-12 mx-auto">
+      <div className="mb-8">
+        <button 
+          onClick={onBack}
+          className="flex items-center gap-2 text-apple-gray-400 hover:text-black dark:hover:text-white transition-colors text-xs font-black uppercase tracking-widest group"
+        >
+          <div className="w-8 h-8 rounded-full border border-apple-gray-100 dark:border-[#222] flex items-center justify-center group-hover:bg-apple-gray-50 dark:group-hover:bg-[#111] transition-all">
+            <ChevronLeft className="w-4 h-4" />
+          </div>
+          Back to Research Home
+        </button>
+      </div>
+      <AnimatePresence mode="wait">
+        {isSearching ? (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-12 py-20"
+          >
+            <div className="flex flex-col items-center gap-6">
+              <Loader2 className="w-12 h-12 animate-spin text-apple-blue" />
+              <h2 className="text-3xl font-black tracking-tight">Synthesizing Intel...</h2>
             </div>
-          ) : result ? (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-10"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={onOpenChat}
-                    className="text-[12px] bg-emerald-500 text-white font-black px-5 py-2.5 rounded-full uppercase tracking-widest flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-emerald-500/20"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Synthesis Mode
-                  </button>
-                </div>
-                <button 
-                  onClick={() => {
-                    if (result?.sources && result.sources.length > 0) {
-                      onCiteAll(result.sources);
-                    }
-                  }}
-                  className="text-[12px] font-black uppercase tracking-widest text-[#1d1d1f] dark:text-white hover:text-apple-blue flex items-center gap-2 transition-colors border border-apple-gray-200 dark:border-[#222] px-6 py-2.5 rounded-full hover:bg-apple-blue/5 bg-white dark:bg-black shadow-sm"
-                >
-                  <Bookmark className="w-4 h-4" />
-                  Cite All Sources
-                </button>
-              </div>
-              <div className="prose prose-neutral dark:prose-invert max-w-none prose-p:text-xl prose-p:leading-relaxed prose-headings:tracking-tighter prose-headings:font-black 
-                prose-strong:text-apple-blue prose-strong:font-black prose-a:text-apple-blue prose-a:font-bold prose-a:no-underline hover:prose-a:underline">
+            <div className="space-y-6 max-w-2xl mx-auto">
+              <div className="h-3 bg-apple-gray-50 dark:bg-[#111] rounded-full w-3/4 animate-pulse" />
+              <div className="h-3 bg-apple-gray-50 dark:bg-[#111] rounded-full w-full animate-pulse" />
+              <div className="h-3 bg-apple-gray-50 dark:bg-[#111] rounded-full w-5/6 animate-pulse" />
+            </div>
+          </motion.div>
+        ) : error ? (
+          <div className="p-12 ios-card bg-red-50/10 border-red-200/20 text-red-500 font-bold text-center">
+            {error}
+          </div>
+        ) : result ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-12"
+          >
+            <div className="flex items-center justify-end">
+              <button 
+                onClick={onSaveSnapshot}
+                className="px-6 py-3 bg-apple-blue text-white font-black rounded-2xl text-[12px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-apple-blue/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Bookmark className="w-4 h-4" />
+                Save Snapshot
+              </button>
+            </div>
+
+            <div className="p-12 ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] shadow-2xl shadow-black/[0.02]">
+              <div className="prose prose-neutral dark:prose-invert max-w-none 
+                prose-p:text-xl prose-p:leading-relaxed prose-p:font-medium
+                prose-headings:font-black prose-headings:tracking-tighter
+                prose-strong:text-apple-blue prose-strong:font-black
+                prose-blockquote:border-l-4 prose-blockquote:border-apple-blue prose-blockquote:bg-apple-blue/5 prose-blockquote:p-6 prose-blockquote:rounded-r-3xl">
                 <ReactMarkdown>{result.answer}</ReactMarkdown>
               </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
+            </div>
 
-      <aside className="space-y-10">
-        <div>
-          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-apple-gray-400 mb-6 flex items-center gap-3">
-            <BookOpen className="w-3.5 h-3.5" />
-            Primary Sources
-          </h3>
-          <div className="space-y-4">
-            {isSearching ? (
-              [1, 2, 3].map(i => (
-                <div key={i} className="h-24 ios-card animate-pulse" />
-              ))
-            ) : result?.sources.length ? (
-              result.sources.map((source, i) => (
-                <div key={i} className="ios-card dark:bg-[#0a0a0a] dark:border-[#222] p-5 group flex flex-col gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <span className="text-[10px] font-black text-apple-blue bg-apple-blue/5 dark:bg-apple-blue/10 px-2 py-0.5 rounded">[{i + 1}]</span>
-                      <a href={source.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-apple-gray-50 dark:hover:bg-[#1a1a1a] rounded-lg transition-colors">
-                        <ExternalLink className="w-3.5 h-3.5 text-apple-gray-400" />
-                      </a>
-                    </div>
-                    <h4 className="font-bold text-sm leading-tight text-black dark:text-white line-clamp-3">
-                      {source.title}
-                    </h4>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 pt-2 border-t border-apple-gray-50 dark:border-[#222]">
-                    <button 
-                      onClick={() => onSave(source)}
-                      className="flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-widest text-[#6c6c6c] dark:text-[#999] hover:text-apple-blue transition-colors rounded-xl hover:bg-apple-blue/5 dark:hover:bg-apple-blue/10"
-                    >
-                      <Bookmark className="w-3 h-3" />
-                      Save
-                    </button>
-                    <button 
-                      onClick={() => onDeepDive(source)}
-                      className="flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-widest text-apple-blue transition-colors rounded-xl bg-apple-blue/5 dark:bg-apple-blue/10 hover:bg-apple-blue/10 dark:hover:bg-apple-blue/20"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      Dive
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : null}
-          </div>
-        </div>
-      </aside>
+            <div className="flex items-center gap-2 text-[10px] text-apple-gray-400 font-extrabold uppercase tracking-[0.2em] justify-center pt-8 border-t border-apple-gray-50 dark:border-[#222]">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              Source: Internal Scholarly Llama-3-70B Logic
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
 
-function LibraryView({ profile, projects, savedSources, onCreateProject, onDownload, onGenerateEssay, activeProject, setActiveProject, onRemoveSource, formatCitation }: { 
-  profile: { name: string, institution: string, avatarColor: string } | null,
+function LibraryView({ projects, savedResearch, activeProject, setActiveProject, onRemoveResearch, onCreateProject, onOpenEssayBuilder }: { 
   projects: Project[], 
-  savedSources: SavedSource[], 
-  onCreateProject: () => void, 
-  onDownload: (f: 'APA' | 'MLA' | 'Chicago') => void,
-  onGenerateEssay: () => void,
+  savedResearch: SavedResearch[], 
   activeProject: string,
   setActiveProject: (id: string) => void,
-  onRemoveSource: (url: string) => void,
-  formatCitation: (s: SavedSource, f: any) => string
+  onRemoveResearch: (id: string) => void,
+  onCreateProject: () => void,
+  onOpenEssayBuilder: () => void
 }) {
-  const filteredSources = activeProject === 'all' 
-    ? savedSources 
-    : savedSources.filter(s => s.projectId === activeProject);
+  const filtered = activeProject === 'all' ? savedResearch : savedResearch.filter(r => r.projectId === activeProject);
 
   return (
-    <div className="grid grid-cols-[240px_1fr] gap-12 h-screen max-h-[80vh]">
-      <aside className="space-y-8 flex flex-col">
-        <div>
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400 mb-4">Projects</h3>
-          <div className="space-y-1">
-            <button 
-              onClick={() => setActiveProject('all')}
-              className={cn("w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all", 
-                activeProject === 'all' ? "bg-black text-white dark:bg-white dark:text-black" : "hover:bg-apple-gray-50 dark:hover:bg-[#111] text-apple-gray-500 dark:text-apple-gray-400")}
-            >
-              All Sources
-            </button>
-            <button 
-              onClick={() => setActiveProject('default')}
-              className={cn("w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all", 
-                activeProject === 'default' ? "bg-black text-white dark:bg-white dark:text-black" : "hover:bg-apple-gray-50 dark:hover:bg-[#111] text-apple-gray-500 dark:text-apple-gray-400")}
-            >
-              Inbox
-            </button>
-            {projects.map(p => (
+    <div className="flex-1 flex flex-col h-full bg-apple-gray-50/30 dark:bg-black overflow-hidden">
+      <div className="flex h-full">
+        {/* Sidebar */}
+        <aside className="w-72 border-r border-apple-gray-100 dark:border-[#222] p-8 space-y-10 bg-white dark:bg-[#050505]">
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-black tracking-[0.2em] text-apple-gray-400 uppercase ml-2">Collections</h3>
+            <div className="space-y-1">
               <button 
-                key={p.id}
-                onClick={() => setActiveProject(p.id)}
-                className={cn("w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all", 
-                  activeProject === p.id ? "bg-black text-white dark:bg-white dark:text-black" : "hover:bg-apple-gray-50 dark:hover:bg-[#111] text-apple-gray-500 dark:text-apple-gray-400")}
+                onClick={() => setActiveProject('all')}
+                className={cn("w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all", 
+                  activeProject === 'all' ? "bg-black text-white dark:bg-white dark:text-black shadow-lg" : "text-apple-gray-400 hover:bg-apple-gray-50 dark:hover:bg-[#111]")}
               >
-                {p.name}
+                All Research
               </button>
-            ))}
-          </div>
-          <button 
-            onClick={onCreateProject}
-            className="w-full mt-4 flex items-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-widest text-apple-blue hover:bg-apple-blue/5 rounded-xl transition-all"
-          >
-            <FolderPlus className="w-4 h-4" />
-            New Project
-          </button>
-        </div>
-
-        <div className="flex-1 flex flex-col justify-end gap-2 pb-12">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400 mb-2">AI Tools</h3>
-          <button 
-            onClick={onGenerateEssay}
-            className="ios-button-primary w-full text-xs py-3 flex items-center justify-center gap-2 mb-4"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Make Essay
-          </button>
-
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400 mb-2">Export Library</h3>
-          <button onClick={() => onDownload('APA')} className="ios-button-secondary w-full text-xs py-3">Export APA</button>
-          <button onClick={() => onDownload('MLA')} className="ios-button-secondary w-full text-xs py-3">Export MLA</button>
-          <button onClick={() => onDownload('Chicago')} className="ios-button-secondary w-full text-xs py-3">Export Chicago</button>
-        </div>
-      </aside>
-
-      <div className="space-y-6 overflow-y-auto pr-4 custom-scrollbar">
-        <div className="flex items-center justify-between sticky top-0 bg-white dark:bg-black py-2 z-10 border-b border-apple-gray-100 dark:border-[#222]">
-          <h2 className="text-3xl font-black tracking-tight dark:text-white">
-            {profile ? `${profile.name.split(' ')[0]}'s Workspace` : activeProject === 'all' ? 'Research Library' : projects.find(p => p.id === activeProject)?.name || 'Inbox'}
-          </h2>
-          <span className="text-xs font-bold text-apple-gray-400">{filteredSources.length} Citations</span>
-        </div>
-
-        {filteredSources.length === 0 ? (
-          <div className="h-[400px] flex flex-col items-center justify-center space-y-4 ios-card bg-apple-gray-50/50 border-dashed border-2">
-            <Bookmark className="w-12 h-12 text-apple-gray-200" />
-            <div className="text-center">
-              <p className="font-bold text-apple-gray-400 underline underline-offset-4 pointer-events-none">No sources saved yet.</p>
-              <p className="text-sm text-apple-gray-400">Save sources from your research to see them here.</p>
+              {projects.map(p => (
+                <button 
+                  key={p.id}
+                  onClick={() => setActiveProject(p.id)}
+                  className={cn("w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all", 
+                    activeProject === p.id ? "bg-black text-white dark:bg-white dark:text-black shadow-lg" : "text-apple-gray-400 hover:bg-apple-gray-50 dark:hover:bg-[#111]")}
+                >
+                  {p.name}
+                </button>
+              ))}
+              <button 
+                onClick={onCreateProject}
+                className="w-full text-left px-4 py-3 rounded-2xl text-sm font-bold text-apple-blue hover:bg-apple-blue/5 transition-all flex items-center gap-2"
+              >
+                <FolderPlus className="w-4 h-4" />
+                New Collection
+              </button>
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredSources.map((source, i) => (
-              <div key={i} className="ios-card p-6 flex flex-col gap-4 bg-white dark:bg-[#0a0a0a] dark:border-[#222]">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h4 className="font-bold text-lg leading-tight mb-2 dark:text-white uppercase tracking-tight">{source.title}</h4>
-                    <p className="text-xs text-apple-blue font-medium truncate mb-4">{source.url}</p>
-                    
-                    <div className="flex flex-col gap-2 p-4 bg-apple-gray-50 dark:bg-[#111] rounded-2xl text-[11px] font-medium text-apple-gray-500 dark:text-apple-gray-400 border border-apple-gray-100 dark:border-transparent">
-                      <div className="flex gap-4">
-                        <span className="w-16 text-apple-gray-400 uppercase tracking-widest text-[9px] font-black">APA</span>
-                        <span className="flex-1 italic">{formatCitation(source, 'APA')}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col gap-2">
-                    <button 
-                      onClick={() => onRemoveSource(source.url)}
-                      className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                    <a href={source.url} target="_blank" rel="noopener noreferrer" className="p-3 text-apple-gray-400 hover:bg-apple-gray-50 dark:hover:bg-[#111] rounded-2xl transition-all">
-                      <ExternalLink className="w-5 h-5" />
-                    </a>
-                  </div>
+
+          <div className="pt-8 border-t border-apple-gray-50 dark:border-[#222]">
+            <button 
+              onClick={onOpenEssayBuilder}
+              disabled={savedResearch.length === 0}
+              className="w-full ios-button-primary py-4 text-xs flex items-center justify-center gap-2 group disabled:opacity-50"
+            >
+              <GraduationCap className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+              Build Research Essay
+            </button>
+          </div>
+        </aside>
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-12 space-y-12 scroll-smooth bg-white dark:bg-black">
+          <div className="max-w-4xl">
+            <header className="mb-12">
+              <h2 className="text-4xl font-black tracking-tight dark:text-white">
+                {activeProject === 'all' ? 'Research Archive' : projects.find(p => p.id === activeProject)?.name}
+              </h2>
+              <p className="text-apple-gray-400 font-medium">{filtered.length} saved scholarly snapshots</p>
+            </header>
+
+            <div className="space-y-8">
+              {filtered.length === 0 ? (
+                <div className="py-32 text-center space-y-4">
+                  <Library className="w-16 h-16 text-apple-gray-100 mx-auto" />
+                  <p className="text-apple-gray-300 font-medium">Your research collection is empty.</p>
                 </div>
+              ) : (
+                filtered.map(item => (
+                  <motion.div 
+                    layout
+                    key={item.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-8 space-y-6 group relative"
+                  >
+                    <button 
+                      onClick={() => onRemoveResearch(item.id)}
+                      className="absolute top-8 right-8 p-2 text-apple-gray-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-apple-blue">
+                      <Sparkles className="w-3 h-3" />
+                      Scholarly Snapshot • {new Date(item.savedAt).toLocaleDateString()}
+                    </div>
+                    
+                    <h4 className="text-2xl font-black tracking-tight dark:text-white line-clamp-2">{item.title}</h4>
+                    
+                    <div className="prose prose-neutral dark:prose-invert max-w-none line-clamp-4 text-sm opacity-60">
+                      <ReactMarkdown>{item.content}</ReactMarkdown>
+                    </div>
+
+                    <div className="pt-6 border-t border-apple-gray-50 dark:border-[#222] flex items-center justify-between">
+                      <span className="text-[10px] text-apple-gray-400 font-bold italic">Query: "{item.query}"</span>
+                      <button className="text-[10px] font-black uppercase tracking-widest text-[#1d1d1f] dark:text-white underline decoration-apple-blue decoration-2 underline-offset-4">
+                        Read Full Findings
+                      </button>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function EssayBuilderView({ researchItems, content, setContent, isDrafting, setIsDrafting }: {
+  researchItems: SavedResearch[],
+  content: string,
+  setContent: (v: string) => void,
+  isDrafting: boolean,
+  setIsDrafting: (v: boolean) => void
+}) {
+  const handleDraft = async () => {
+    setIsDrafting(true);
+    const context = researchItems.map(r => `SOURCE: ${r.title}\nCONTENT: ${r.content}`).join('\n\n');
+    try {
+      const res = await fetch("/api/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: `Using these research snapshots, write a structured scholarly essay: \n\n${context}` })
+      });
+      const data = await res.json();
+      setContent(data.answer);
+    } catch {
+      alert("Drafting failed.");
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-white dark:bg-black overflow-hidden px-8 py-12">
+      <div className="max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-12 h-full overflow-hidden">
+        {/* Selection Area */}
+        <div className="space-y-8 flex flex-col overflow-hidden">
+          <header>
+            <h2 className="text-3xl font-black tracking-tight dark:text-white">Essay Builder</h2>
+            <p className="text-sm text-apple-gray-400 font-medium">Synthesizing {researchItems.length} research units</p>
+          </header>
+
+          <div className="flex-1 overflow-y-auto space-y-4 pr-4 custom-scrollbar">
+            {researchItems.map(item => (
+              <div key={item.id} className="p-5 ios-card bg-apple-gray-50/50 dark:bg-[#111] dark:border-[#222]">
+                <h4 className="text-[11px] font-black uppercase tracking-widest mb-2 dark:text-white">{item.title}</h4>
+                <p className="text-[10px] text-apple-gray-400 line-clamp-2">{item.query}</p>
               </div>
             ))}
           </div>
-        )}
+
+          <button 
+            onClick={handleDraft}
+            disabled={isDrafting || researchItems.length === 0}
+            className="w-full ios-button-primary py-5 text-sm flex items-center justify-center gap-3 shadow-2xl shadow-apple-blue/20"
+          >
+            {isDrafting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+            Generate Intelligence Draft
+          </button>
+        </div>
+
+        {/* Writing Area */}
+        <div className="ios-card dark:bg-[#0a0a0a] dark:border-[#222] shadow-2xl flex flex-col overflow-hidden border border-apple-gray-100">
+          <div className="p-6 bg-apple-gray-50 dark:bg-[#111] border-b border-apple-gray-200 dark:border-[#222] flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400">Scholarly Workspace</span>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setContent('')}
+                className="p-2 hover:bg-apple-gray-200 dark:hover:bg-[#222] rounded-lg transition-colors text-apple-gray-400"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <textarea 
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Your scholarly draft will appear here..."
+            className="flex-1 w-full bg-transparent p-12 text-lg font-medium leading-relaxed outline-none resize-none dark:text-white placeholder:text-apple-gray-100"
+          />
+        </div>
       </div>
     </div>
   );
@@ -1221,35 +929,18 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
   isLoading: boolean
 }) {
   return (
-    <div className="w-full max-w-4xl flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-white dark:bg-black">
+    <div className="w-full max-w-4xl flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-white dark:bg-black mx-auto">
       <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
         {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
+          <div className="h-full flex flex-col items-center justify-center text-center space-y-6 py-20">
             <div className="w-20 h-20 rounded-[32px] bg-black dark:bg-white flex items-center justify-center shadow-2xl">
               <Sparkles className="w-10 h-10 text-white dark:text-black" />
             </div>
             <div className="max-w-md">
-              <h2 className="text-3xl font-black tracking-tight mb-4 dark:text-white">Advanced Scholar Chat</h2>
+              <h2 className="text-3xl font-black tracking-tight mb-4 dark:text-white">Advanced AI Reasoning</h2>
               <p className="text-apple-gray-400 font-medium leading-relaxed dark:text-[#444]">
-                Powered by Llama-3-70B on Groq. High-speed academic reasoning and data synthesis.
-                Ask about complex datasets, academic methodology, or code synthesis.
+                Direct neural interface with ScholarMind's Llama-3-70B edge processing.
               </p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2 mt-8">
-              {[
-                "Analyze recent trends in room-temperature superconductivity",
-                "Generate a Python script for multivariate regression analysis",
-                "Synthesize current consensus on the Voyager 1 data anomaly",
-                "Evaluate the statistical significance of recent longevity studies"
-              ].map(t => (
-                <button 
-                  key={t}
-                  onClick={() => setInput(t)}
-                  className="text-[11px] font-bold bg-white dark:bg-[#111] border border-apple-gray-100 dark:border-[#222] px-4 py-2 rounded-xl hover:border-apple-blue transition-colors px-4 truncate max-w-[300px] dark:text-apple-gray-400"
-                >
-                  {t}
-                </button>
-              ))}
             </div>
           </div>
         )}
@@ -1267,7 +958,7 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
             </div>
             <div className={cn("flex-1 p-6 rounded-[28px] text-lg leading-relaxed shadow-sm border", 
               msg.role === 'user' ? "bg-apple-blue/5 dark:bg-apple-blue/10 border-apple-blue/10 text-[#1d1d1f] dark:text-white" : "bg-white dark:bg-[#0a0a0a] border-apple-gray-100 dark:border-[#222] text-[#1d1d1f] dark:text-white")}>
-              <div className="prose prose-neutral dark:prose-invert max-w-none prose-strong:text-apple-blue prose-strong:font-black prose-pre:bg-apple-gray-900 prose-pre:text-apple-gray-50 prose-pre:p-6 prose-pre:rounded-3xl">
+              <div className="prose prose-neutral dark:prose-invert max-w-none">
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
             </div>
@@ -1286,7 +977,7 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
 
       <div className="p-8 bg-gradient-to-t from-white via-white dark:from-black dark:via-black to-transparent">
         <form onSubmit={onSend} className="max-w-3xl mx-auto relative group">
-          <div className="ios-card bg-white dark:bg-[#151515] dark:border-[#222] shadow-2xl shadow-black/5 dark:shadow-none p-1 ring-1 ring-apple-gray-100 dark:ring-[#333] hover:ring-apple-blue/20 transition-all">
+          <div className="ios-card bg-white dark:bg-[#151515] dark:border-[#222] shadow-2xl p-1">
             <textarea
               rows={2}
               value={input}
@@ -1297,20 +988,17 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
                   onSend(e as any);
                 }
               }}
-              placeholder="Deep analysis, data synthesis, coding..."
-              className="w-full bg-transparent p-4 pr-16 text-lg outline-none resize-none placeholder:text-apple-gray-300 dark:placeholder:text-[#444] dark:text-white"
+              placeholder="Deep analysis..."
+              className="w-full bg-transparent p-4 pr-16 text-lg outline-none resize-none dark:text-white"
             />
             <button 
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black dark:bg-white text-white dark:text-black p-3 rounded-2xl disabled:opacity-30 disabled:scale-100 transition-all hover:scale-105 active:scale-95"
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black dark:bg-white text-white dark:text-black p-3 rounded-2xl disabled:opacity-30 transition-all hover:scale-105 active:scale-95"
             >
               <ChevronRight className="w-6 h-6" />
             </button>
           </div>
-          <p className="text-center mt-3 text-[10px] uppercase font-black tracking-widest text-apple-gray-400">
-            Advanced Scholarly Interface • Grounded by Google Search
-          </p>
         </form>
       </div>
     </div>
