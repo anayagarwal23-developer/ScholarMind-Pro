@@ -24,16 +24,27 @@ async function startServer() {
   });
 
   app.post("/api/research", async (req, res) => {
-    const { query } = req.body;
-    if (!groq) return res.status(500).json({ error: "GROQ_API_KEY not configured on server." });
+    const { query, strictness, personality } = req.body;
+    if (!groq) return res.status(500).json({ error: "GROQ_API_KEY is missing. Please add it to your project secrets in the sidebar settings." });
+
+    let systemPrompt = "You are an objective, informational research engine. Your task is to provide direct, factual, and scholarly summaries grounded in academic consensus. Do NOT use conversational fillers. Start your response immediately with the information requested. Use primary source logic and citations [n].";
+
+    if (strictness === 'strict') {
+      systemPrompt += " Be extremely rigorous. Only include information with near-absolute academic certainty. Avoid any controversial or fringe theories unless specifically requested.";
+    } else if (strictness === 'loose') {
+      systemPrompt += " You may include emerging research and a broader range of scholarly perspectives, including notable fringe theories if they are relevant.";
+    }
+
+    if (personality === 'analytical') {
+      systemPrompt += " Your tone should be highly methodical and data-driven. Focus heavily on methodologies and statistical significance.";
+    } else if (personality === 'creative') {
+      systemPrompt += " While remaining scholarly, use metaphors and diverse interdisciplinary connections to explain complex concepts.";
+    }
 
     try {
       const completion = await groq.chat.completions.create({
         messages: [
-          { 
-            role: "system", 
-            content: "You are an objective, informational research engine. Your task is to provide direct, factual, and scholarly summaries grounded in academic consensus. Do NOT use conversational fillers (e.g., 'Hello', 'I hope you\'re having a good day', 'How can I help you today?'). Start your response immediately with the information requested. Use primary source logic and citations [n]." 
-          },
+          { role: "system", content: systemPrompt },
           { role: "user", content: query }
         ],
         model: "llama-3.3-70b-versatile",

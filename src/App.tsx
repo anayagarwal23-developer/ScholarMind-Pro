@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, ChevronLeft, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User } from 'lucide-react';
+import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, ChevronLeft, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User, HelpCircle, Info, Globe, Palette, Shield, Eye, Type, Maximize2, Zap, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { scholarSearch, deepDive, synthesizeChat, advancedScholarChat, type SearchResponse, type SearchSource } from './lib/groq';
@@ -34,13 +34,21 @@ export default function App() {
   
   const [searchHistory, setSearchHistory] = useState<{ query: string, timestamp: number }[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Projects and Saved Research
   const [projects, setProjects] = useState<Project[]>([]);
   const [savedResearch, setSavedResearch] = useState<SavedResearch[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('all');
-  const [view, setView] = useState<'search' | 'library' | 'ai-chat' | 'essay-builder'>('search');
+  const [view, setView] = useState<'search' | 'library' | 'ai-chat' | 'essay-builder' | 'settings'>('search');
+
+  // Advanced Settings State
+  const [searchStrictness, setSearchStrictness] = useState<'loose' | 'balanced' | 'strict'>('balanced');
+  const [autoSaveResearch, setAutoSaveResearch] = useState(false);
+  const [contentWidth, setContentWidth] = useState<'compact' | 'standard' | 'wide'>('standard');
+  const [fontSize, setFontSize] = useState<'sm' | 'md' | 'lg'>('md');
+  const [aiPersonality, setAiPersonality] = useState<'objective' | 'creative' | 'analytical'>('objective');
+
+  // Tutorial State
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
 
   // Advanced AI Chat State
   const [advChatMessages, setAdvChatMessages] = useState<{ role: 'user' | 'model', content: string }[]>([]);
@@ -68,12 +76,25 @@ export default function App() {
       const storedHistory = localStorage.getItem('sm_history');
       const storedTheme = localStorage.getItem('sm_theme');
       const storedProfile = localStorage.getItem('sm_profile');
+      
+      // New Settings
+      const storedStrictness = localStorage.getItem('sm_strictness');
+      const storedAutoSave = localStorage.getItem('sm_autosave');
+      const storedWidth = localStorage.getItem('sm_width');
+      const storedFontSize = localStorage.getItem('sm_fontsize');
+      const storedPersonality = localStorage.getItem('sm_personality');
 
       if (storedProjects) setProjects(JSON.parse(storedProjects));
       if (storedResearch) setSavedResearch(JSON.parse(storedResearch));
       if (storedHistory) setSearchHistory(JSON.parse(storedHistory));
       if (storedTheme) setTheme(storedTheme as 'light' | 'dark');
       if (storedProfile) setProfile(JSON.parse(storedProfile));
+      
+      if (storedStrictness) setSearchStrictness(storedStrictness as any);
+      if (storedAutoSave) setAutoSaveResearch(storedAutoSave === 'true');
+      if (storedWidth) setContentWidth(storedWidth as any);
+      if (storedFontSize) setFontSize(storedFontSize as any);
+      if (storedPersonality) setAiPersonality(storedPersonality as any);
       
       setIsInitialized(true);
     } catch (e) {
@@ -89,6 +110,12 @@ export default function App() {
     localStorage.setItem('sm_research', JSON.stringify(savedResearch));
     localStorage.setItem('sm_history', JSON.stringify(searchHistory));
     localStorage.setItem('sm_theme', theme);
+    localStorage.setItem('sm_strictness', searchStrictness);
+    localStorage.setItem('sm_autosave', String(autoSaveResearch));
+    localStorage.setItem('sm_width', contentWidth);
+    localStorage.setItem('sm_fontsize', fontSize);
+    localStorage.setItem('sm_personality', aiPersonality);
+
     if (profile) localStorage.setItem('sm_profile', JSON.stringify(profile));
     else localStorage.removeItem('sm_profile');
   }, [projects, savedResearch, searchHistory, theme, profile, isInitialized]);
@@ -102,9 +129,10 @@ export default function App() {
     }
   }, [theme]);
 
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
     e?.preventDefault();
-    if (!query.trim()) return;
+    const targetQuery = overrideQuery || query;
+    if (!targetQuery.trim()) return;
 
     setIsSearching(true);
     setError(null);
@@ -112,10 +140,14 @@ export default function App() {
     setView('search');
     
     try {
-      setSearchHistory(prev => [{ query, timestamp: Date.now() }, ...prev].slice(0, 20));
+      setSearchHistory(prev => [{ query: targetQuery, timestamp: Date.now() }, ...prev].slice(0, 20));
       
-      const data = await scholarSearch(query);
+      const data = await scholarSearch(targetQuery, { strictness: searchStrictness, personality: aiPersonality });
       setResult(data);
+
+      if (autoSaveResearch) {
+        handleSaveResearch(`Automated Research: ${targetQuery}`, data.answer);
+      }
     } catch (err: any) {
       console.error(err);
       let msg = err?.message || "An error occurred while performing research.";
@@ -147,6 +179,20 @@ export default function App() {
 
   const handleRemoveResearch = (id: string) => {
     setSavedResearch(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleClearHistory = () => {
+    if (window.confirm("Delete all search history?")) {
+      setSearchHistory([]);
+      localStorage.removeItem('sm_history');
+    }
+  };
+
+  const startTutorial = () => {
+    setView('search');
+    setHasSearched(false);
+    setTutorialStep(0);
+    setShowTutorial(true);
   };
 
   const handleCreateProject = () => {
@@ -221,7 +267,6 @@ export default function App() {
     e?.preventDefault();
     if (window.confirm("Sign out of your local workspace? Library data will stay on this device.")) {
       setProfile(null);
-      setIsSettingsOpen(false);
       // Brief visual feedback if needed
     }
   };
@@ -260,7 +305,6 @@ export default function App() {
           setTheme(data.theme || 'light');
           setProfile(data.profile || null);
           alert("Workspace restored successfully!");
-          setIsSettingsOpen(false);
         } else {
           alert("Invalid backup file format.");
         }
@@ -275,7 +319,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-white dark:bg-[#000000] text-black dark:text-white transition-colors duration-300 font-sans">
       {!isConfigured && (
         <div className="bg-red-500 text-white text-[10px] py-1.5 px-4 text-center font-black uppercase tracking-[0.2em] sticky top-0 z-[100] animate-pulse">
-          Critical: GROQ_API_KEY Missing • Research functions disabled • Configure in Deployment Settings
+          Critical: GROQ_API_KEY Missing • Add it to "Secrets" in the AI Studio Settings menu to enable research.
         </div>
       )}
       <header className="px-6 h-16 flex items-center justify-between sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-apple-gray-100 dark:border-[#222]">
@@ -287,6 +331,7 @@ export default function App() {
           
           <nav className="flex items-center gap-4">
             <button 
+              id="search-nav"
               onClick={() => setView('search')}
               className={cn("text-sm font-semibold px-4 py-1.5 rounded-full transition-all", 
                 view === 'search' ? "bg-black text-white dark:bg-white dark:text-black shadow-lg shadow-black/10 dark:shadow-white/5" : "text-apple-gray-400 hover:text-black dark:hover:text-white hover:bg-apple-gray-50 dark:hover:bg-white/5")}
@@ -294,6 +339,7 @@ export default function App() {
               Search
             </button>
             <button 
+              id="ai-chat-nav"
               onClick={() => setView('ai-chat')}
               className={cn("text-sm font-semibold px-4 py-1.5 rounded-full transition-all flex items-center gap-1.5", 
                 view === 'ai-chat' ? "bg-black text-white dark:bg-white dark:text-black shadow-lg shadow-black/10 dark:shadow-white/5" : "text-apple-gray-400 hover:text-apple-blue hover:bg-apple-blue/5")}
@@ -302,6 +348,7 @@ export default function App() {
               Search with AI
             </button>
             <button 
+              id="library-nav"
               onClick={() => setView('library')}
               className={cn("text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-2 transition-all", 
                 view === 'library' ? "bg-black text-white dark:bg-white dark:text-black shadow-lg shadow-black/10 dark:shadow-white/5" : "text-apple-gray-400 hover:text-black dark:hover:text-white hover:bg-apple-gray-50 dark:hover:bg-white/5")}
@@ -327,8 +374,19 @@ export default function App() {
 
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className="p-2 text-apple-gray-400 hover:text-black dark:hover:text-white transition-colors rounded-full hover:bg-apple-gray-50 dark:hover:bg-[#111]"
+            id="tutorial-btn"
+            onClick={startTutorial}
+            className="p-2 text-apple-gray-400 hover:text-apple-blue transition-colors rounded-full hover:bg-apple-blue/5"
+            title="Open Walkthrough"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
+
+          <button 
+            id="settings-btn"
+            onClick={() => setView('settings')}
+            className={cn("p-2 transition-colors rounded-full", 
+              view === 'settings' ? "bg-black text-white dark:bg-white dark:text-black" : "text-apple-gray-400 hover:text-black dark:hover:text-white hover:bg-apple-gray-50 dark:hover:bg-[#111]")}
           >
             <Settings className="w-5 h-5" />
           </button>
@@ -338,7 +396,8 @@ export default function App() {
           <div className="flex items-center gap-3">
             {profile ? (
               <button 
-                onClick={() => setIsSettingsOpen(true)}
+                id="profile-btn"
+                onClick={() => setView('settings')}
                 className="group relative flex items-center gap-2 pr-1 pl-3 py-1 bg-apple-gray-50 dark:bg-[#111] hover:bg-apple-gray-100 dark:hover:bg-[#1a1a1a] rounded-full transition-all active:scale-95 border border-apple-gray-100 dark:border-[#222]"
               >
                 <span className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400 group-hover:text-black dark:group-hover:text-white transition-colors">
@@ -362,99 +421,21 @@ export default function App() {
             )}
           </div>
         </div>
-
-        <AnimatePresence>
-          {isSettingsOpen && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute top-20 right-6 w-72 ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-6 shadow-2xl z-[100]"
-            >
-              <div className="space-y-6">
-                  {profile && (
-                    <div className="flex items-center gap-4 px-2 py-1">
-                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white shadow-xl rotate-3" style={{ backgroundColor: profile.avatarColor }}>
-                        {profile.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-base font-black truncate text-black dark:text-white leading-tight">{profile.name}</p>
-                        <p className="text-[10px] text-apple-gray-400 font-bold uppercase tracking-widest truncate">{profile.institution || 'Independent Researcher'}</p>
-                      </div>
-                    </div>
-                  )}
-                
-                <div className="space-y-4">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-apple-gray-400">Environment</h3>
-                <div className="flex items-center justify-between p-3.5 bg-apple-gray-50 dark:bg-[#151515] rounded-[24px] border border-apple-gray-100 dark:border-[#222]">
-                  <span className="text-xs font-bold text-apple-gray-500 dark:text-apple-gray-400">Appearance</span>
-                  <button 
-                    type="button"
-                    onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
-                    className="flex items-center gap-2 text-[11px] font-black bg-white dark:bg-[#252525] px-4 py-2 rounded-xl shadow-sm border border-apple-gray-100 dark:border-[#333] hover:scale-105 active:scale-95 transition-all text-black dark:text-white uppercase tracking-wider"
-                  >
-                    {theme === 'light' ? <Sun className="w-3 h-3 text-orange-400" /> : <Moon className="w-3 h-3 text-blue-400" />}
-                    {theme} Mode
-                  </button>
-                </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={exportWorkspace}
-                      className="flex-1 flex items-center justify-center gap-2 bg-apple-gray-50 dark:bg-[#151515] py-3.5 rounded-[20px] border border-apple-gray-100 dark:border-[#222] text-[10px] font-black uppercase tracking-widest text-apple-gray-500 hover:text-black dark:hover:text-white transition-all active:scale-95"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Backup
-                    </button>
-                    <label className="flex-1 flex items-center justify-center gap-2 bg-apple-gray-50 dark:bg-[#151515] py-3.5 rounded-[20px] border border-apple-gray-100 dark:border-[#222] text-[10px] font-black uppercase tracking-widest text-apple-gray-500 hover:text-apple-blue transition-all active:scale-95 cursor-pointer">
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Restore
-                      <input type="file" accept=".scholar" onChange={importWorkspace} className="hidden" />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-apple-gray-400">History</h3>
-                  <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-2">
-                    {searchHistory.length === 0 ? (
-                      <p className="text-[10px] text-apple-gray-400 italic px-2">No history yet.</p>
-                    ) : (
-                      searchHistory.slice(0, 10).map((h, i) => (
-                        <button 
-                          key={i} 
-                          onClick={() => { setQuery(h.query); handleSearch(); setIsSettingsOpen(false); }}
-                          className="w-full text-left text-[11px] font-medium text-apple-gray-500 hover:text-apple-blue dark:text-apple-gray-400 dark:hover:text-apple-blue flex items-center gap-2.5 p-2 hover:bg-apple-gray-50 dark:hover:bg-[#151515] rounded-xl transition-all truncate"
-                        >
-                          <History className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">{h.query}</span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-apple-gray-100 dark:border-[#222] space-y-3">
-                  {profile && (
-                    <button 
-                      onClick={() => { setProfile(null); setIsSettingsOpen(false); }}
-                      className="w-full flex items-center justify-center gap-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      De-authorize Workspace
-                    </button>
-                  )}
-                  <div className="text-[9px] text-apple-gray-400 font-extrabold uppercase tracking-[0.25em] leading-relaxed text-center opacity-40">
-                    ScholarMind Pro <br /> Local Workspace 1.4.0
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </header>
 
-      <main className="flex-1 flex flex-col relative overflow-hidden dark:bg-[#000000]">
+      {showTutorial && (
+        <TutorialOverlay 
+          step={tutorialStep} 
+          setStep={setTutorialStep} 
+          onClose={() => setShowTutorial(false)} 
+        />
+      )}
+
+      <main className={cn(
+        "flex-1 flex flex-col relative overflow-hidden dark:bg-[#000000]",
+        fontSize === 'sm' && "text-sm",
+        fontSize === 'lg' && "text-lg"
+      )}>
         <AnimatePresence>
           {isProfileModalOpen && (
             <motion.div 
@@ -522,7 +503,11 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col items-center overflow-y-auto"
+              className={cn(
+                "flex-1 flex flex-col items-center overflow-y-auto",
+                contentWidth === 'compact' && "max-w-2xl mx-auto",
+                contentWidth === 'wide' && "max-w-7xl mx-auto"
+              )}
             >
               {!hasSearched ? (
                 <Hero onSearch={handleSearch} query={query} setQuery={setQuery} onOpenAiChat={() => setView('ai-chat')} />
@@ -537,31 +522,80 @@ export default function App() {
               )}
             </motion.div>
           ) : view === 'library' ? (
-            <LibraryView 
-              projects={projects}
-              savedResearch={savedResearch}
-              activeProject={activeProjectId}
-              setActiveProject={setActiveProjectId}
-              onRemoveResearch={handleRemoveResearch}
-              onCreateProject={handleCreateProject}
-              onOpenEssayBuilder={() => setView('essay-builder')}
-            />
+            <div className={cn(
+               "flex-1 flex flex-col",
+               contentWidth === 'compact' && "max-w-2xl mx-auto w-full",
+               contentWidth === 'wide' && "max-w-7xl mx-auto w-full"
+            )}>
+              <LibraryView 
+                projects={projects}
+                savedResearch={savedResearch}
+                activeProject={activeProjectId}
+                setActiveProject={setActiveProjectId}
+                onRemoveResearch={handleRemoveResearch}
+                onCreateProject={handleCreateProject}
+                onOpenEssayBuilder={() => setView('essay-builder')}
+              />
+            </div>
           ) : view === 'essay-builder' ? (
-            <EssayBuilderView 
-              researchItems={savedResearch}
-              content={essayContent}
-              setContent={setEssayContent}
-              isDrafting={isDrafting}
-              setIsDrafting={setIsDrafting}
-            />
+            <div className={cn(
+               "flex-1 flex flex-col",
+               contentWidth === 'compact' && "max-w-2xl mx-auto w-full",
+               contentWidth === 'wide' && "max-w-7xl mx-auto w-full"
+            )}>
+              <EssayBuilderView 
+                researchItems={savedResearch}
+                content={essayContent}
+                setContent={setEssayContent}
+                isDrafting={isDrafting}
+                setIsDrafting={setIsDrafting}
+              />
+            </div>
+          ) : view === 'settings' ? (
+            <div className={cn(
+               "flex-1 flex flex-col",
+               contentWidth === 'compact' && "max-w-2xl mx-auto w-full",
+               contentWidth === 'wide' && "max-w-7xl mx-auto w-full"
+            )}>
+              <SettingsView 
+                theme={theme}
+                setTheme={setTheme}
+                profile={profile}
+                setProfile={setProfile}
+                onOpenProfileModal={() => setIsProfileModalOpen(true)}
+                searchHistory={searchHistory}
+                onClearHistory={handleClearHistory}
+                onSearchHistoryItem={(q) => { setQuery(q); handleSearch(undefined, q); }}
+                exportWorkspace={exportWorkspace}
+                importWorkspace={importWorkspace}
+                startTutorial={startTutorial}
+                // New Settings props
+                strictness={searchStrictness}
+                setStrictness={setSearchStrictness}
+                autoSave={autoSaveResearch}
+                setAutoSave={setAutoSaveResearch}
+                contentWidth={contentWidth}
+                setContentWidth={setContentWidth}
+                fontSize={fontSize}
+                setFontSize={setFontSize}
+                personality={aiPersonality}
+                setPersonality={setAiPersonality}
+              />
+            </div>
           ) : (
-            <AdvancedChatView 
-              messages={advChatMessages}
-              input={advChatInput}
-              setInput={setAdvChatInput}
-              isLoading={isAdvLoading}
-              onSend={handleAdvChat}
-            />
+            <div className={cn(
+               "flex-1 flex flex-col",
+               contentWidth === 'compact' && "max-w-2xl mx-auto w-full",
+               contentWidth === 'wide' && "max-w-7xl mx-auto w-full"
+            )}>
+              <AdvancedChatView 
+                messages={advChatMessages}
+                input={advChatInput}
+                setInput={setAdvChatInput}
+                isLoading={isAdvLoading}
+                onSend={handleAdvChat}
+              />
+            </div>
           )}
         </AnimatePresence>
       </main>
@@ -609,6 +643,7 @@ function Hero({ onSearch, query, setQuery, onOpenAiChat }: { onSearch: (e: React
       >
         <div className="ios-card overflow-hidden p-1 bg-white dark:bg-[#111] dark:border-[#222]">
           <input
+            id="search-input"
             type="text"
             autoFocus
             value={query}
@@ -628,6 +663,7 @@ function Hero({ onSearch, query, setQuery, onOpenAiChat }: { onSearch: (e: React
 
       <div className="mt-8">
         <button 
+          id="pro-chat-btn"
           onClick={onOpenAiChat}
           className="flex items-center gap-2 px-6 py-3 bg-apple-blue/5 dark:bg-apple-blue/10 text-apple-blue rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-apple-blue/10 dark:hover:bg-apple-blue/20 transition-all active:scale-95"
         >
@@ -772,6 +808,7 @@ function LibraryView({ projects, savedResearch, activeProject, setActiveProject,
 
           <div className="pt-8 border-t border-apple-gray-50 dark:border-[#222]">
             <button 
+              id="builder-nav"
               onClick={onOpenEssayBuilder}
               disabled={savedResearch.length === 0}
               className="w-full ios-button-primary py-4 text-xs flex items-center justify-center gap-2 group disabled:opacity-50"
@@ -784,7 +821,7 @@ function LibraryView({ projects, savedResearch, activeProject, setActiveProject,
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-12 space-y-12 scroll-smooth bg-white dark:bg-black">
-          <div className="max-w-4xl">
+          <div className="w-full">
             <header className="mb-12">
               <h2 className="text-4xl font-black tracking-tight dark:text-white">
                 {activeProject === 'all' ? 'Research Archive' : projects.find(p => p.id === activeProject)?.name}
@@ -869,7 +906,7 @@ function EssayBuilderView({ researchItems, content, setContent, isDrafting, setI
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-black overflow-hidden px-8 py-12">
-      <div className="max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-12 h-full overflow-hidden">
+      <div className="w-full grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-12 h-full overflow-hidden">
         {/* Selection Area */}
         <div className="space-y-8 flex flex-col overflow-hidden">
           <header>
@@ -929,7 +966,7 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
   isLoading: boolean
 }) {
   return (
-    <div className="w-full max-w-4xl flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-white dark:bg-black mx-auto">
+    <div className="w-full flex-1 flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-white dark:bg-black mx-auto">
       <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-6 py-20">
@@ -1001,6 +1038,374 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function SettingsView({ 
+  theme, setTheme, profile, setProfile, onOpenProfileModal, searchHistory, onClearHistory, onSearchHistoryItem, exportWorkspace, importWorkspace, startTutorial,
+  strictness, setStrictness, autoSave, setAutoSave, contentWidth, setContentWidth, fontSize, setFontSize, personality, setPersonality 
+}: { 
+  theme: 'light' | 'dark', 
+  setTheme: (t: 'light' | 'dark') => void, 
+  profile: any, 
+  setProfile: (p: any) => void, 
+  onOpenProfileModal: () => void,
+  searchHistory: { query: string, timestamp: number }[],
+  onClearHistory: () => void,
+  onSearchHistoryItem: (q: string) => void,
+  exportWorkspace: () => void,
+  importWorkspace: (e: any) => void,
+  startTutorial: () => void,
+  strictness: string,
+  setStrictness: (s: any) => void,
+  autoSave: boolean,
+  setAutoSave: (b: boolean) => void,
+  contentWidth: string,
+  setContentWidth: (w: any) => void,
+  fontSize: string,
+  setFontSize: (s: any) => void,
+  personality: string,
+  setPersonality: (p: any) => void
+}) {
+  return (
+    <div className="flex-1 overflow-y-auto bg-apple-gray-50/30 dark:bg-black p-8">
+      <div className="w-full space-y-12 pb-24">
+        {/* Header */}
+        <div className="flex items-end justify-between border-b border-apple-gray-100 dark:border-[#222] pb-8">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight dark:text-white">Settings</h1>
+            <p className="text-apple-gray-400 font-medium mt-1">Personalize your research workstation.</p>
+          </div>
+          <button 
+            onClick={startTutorial}
+            className="px-6 py-3 bg-apple-blue text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-apple-blue/20 flex items-center gap-2"
+          >
+            <HelpCircle className="w-4 h-4" />
+            Launch Tutorial
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Identity Section */}
+          <section className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-apple-gray-400 flex items-center gap-2">
+              <User className="w-3 h-3" /> Identity
+            </h3>
+            <div className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-6 space-y-6">
+              {profile ? (
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-3xl flex items-center justify-center text-2xl font-black text-white shadow-xl" style={{ backgroundColor: profile.avatarColor }}>
+                    {profile.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black dark:text-white">{profile.name}</h4>
+                    <p className="text-xs text-apple-gray-400 font-bold uppercase tracking-widest">{profile.institution}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-apple-gray-400 mb-4 font-medium">No scholarship identity initialized.</p>
+                  <button onClick={onOpenProfileModal} className="ios-button-primary w-full py-3">Initialize Identity</button>
+                </div>
+              )}
+              {profile && (
+                <div className="flex gap-2 pt-2 border-t border-apple-gray-50 dark:border-[#151515]">
+                  <button onClick={onOpenProfileModal} className="flex-1 text-[10px] font-black uppercase tracking-widest py-3 text-apple-gray-400 hover:text-black dark:hover:text-white transition-colors">Edit Profile</button>
+                  <button onClick={() => setProfile(null)} className="flex-1 text-[10px] font-black uppercase tracking-widest py-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all">De-authorize</button>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Appearance Section */}
+          <section className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-apple-gray-400 flex items-center gap-2">
+              <Palette className="w-3 h-3" /> Appearance
+            </h3>
+            <div className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-apple-gray-500">Theme</span>
+                <button 
+                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                  className="flex items-center gap-2 text-[11px] font-black bg-apple-gray-50 dark:bg-[#151515] px-4 py-2 rounded-xl transition-all hover:scale-105 uppercase tracking-wider"
+                >
+                  {theme === 'light' ? <Sun className="w-3 h-3 text-orange-400" /> : <Moon className="w-3 h-3 text-blue-400" />}
+                  {theme}
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-apple-gray-500">Font Size</span>
+                <div className="flex gap-1 bg-apple-gray-50 dark:bg-[#151515] p-1 rounded-xl">
+                  {['sm', 'md', 'lg'].map(s => (
+                    <button 
+                      key={s}
+                      onClick={() => setFontSize(s)}
+                      className={cn("px-3 py-1 text-[10px] font-black uppercase rounded-lg transition-all", 
+                        fontSize === s ? "bg-white dark:bg-[#252525] shadow-sm text-black dark:text-white" : "text-apple-gray-400")}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-apple-gray-500">Layout Width</span>
+                <div className="flex gap-1 bg-apple-gray-50 dark:bg-[#151515] p-1 rounded-xl">
+                  {['compact', 'standard', 'wide'].map(w => (
+                    <button 
+                      key={w}
+                      onClick={() => setContentWidth(w)}
+                      className={cn("px-3 py-1 text-[10px] font-black uppercase rounded-lg transition-all", 
+                        contentWidth === w ? "bg-white dark:bg-[#252525] shadow-sm text-black dark:text-white" : "text-apple-gray-400")}
+                    >
+                      {w === 'compact' ? 'Comp' : w === 'wide' ? 'Wide' : 'Std'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Research Preferences */}
+          <section className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-apple-gray-400 flex items-center gap-2">
+              <Zap className="w-3 h-3" /> Research Engines
+            </h3>
+            <div className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-apple-gray-500 block">Search Strictness</span>
+                  <span className="text-[9px] text-apple-gray-400 uppercase tracking-widest font-bold">Llama-3 Filtering</span>
+                </div>
+                <select 
+                  value={strictness}
+                  onChange={(e) => setStrictness(e.target.value as any)}
+                  className="bg-apple-gray-50 dark:bg-[#151515] text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl outline-none"
+                >
+                  <option value="loose">Loose</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="strict">Strict</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-apple-gray-500 block">AI Personality</span>
+                  <span className="text-[9px] text-apple-gray-400 uppercase tracking-widest font-bold">Synthesis Tone</span>
+                </div>
+                <select 
+                  value={personality}
+                  onChange={(e) => setPersonality(e.target.value as any)}
+                  className="bg-apple-gray-50 dark:bg-[#151515] text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl outline-none"
+                >
+                  <option value="objective">Objective</option>
+                  <option value="analytical">Analytical</option>
+                  <option value="creative">Creative</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-apple-gray-50 dark:border-[#151515]">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-apple-gray-500 block">Auto-save Snapshots</span>
+                  <span className="text-[9px] text-apple-gray-400 uppercase tracking-widest font-bold">Direct to Hub</span>
+                </div>
+                <button 
+                  onClick={() => setAutoSave(!autoSave)}
+                  className={cn("w-12 h-6 rounded-full transition-all flex items-center px-1", 
+                    autoSave ? "bg-apple-blue" : "bg-apple-gray-200 dark:bg-[#333]")}
+                >
+                  <div className={cn("w-4 h-4 rounded-full bg-white transition-all shadow-sm", 
+                    autoSave ? "translate-x-6" : "translate-x-0")} />
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Data Management */}
+          <section className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-apple-gray-400 flex items-center gap-2">
+              <Shield className="w-3 h-3" /> Data & Sync
+            </h3>
+            <div className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-6 space-y-4">
+              <div className="flex gap-2">
+                <button onClick={exportWorkspace} className="flex-1 flex items-center justify-center gap-2 bg-apple-gray-50 dark:bg-[#151515] py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-apple-gray-100 dark:hover:bg-[#222] transition-all">
+                  <Download className="w-3 h-3" /> Backup
+                </button>
+                <label className="flex-1 flex items-center justify-center gap-2 bg-apple-gray-50 dark:bg-[#151515] py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-apple-gray-100 dark:hover:bg-[#222] transition-all cursor-pointer">
+                  <ExternalLink className="w-3 h-3" /> Restore
+                  <input type="file" accept=".scholar" onChange={importWorkspace} className="hidden" />
+                </label>
+              </div>
+              <button 
+                onClick={onClearHistory}
+                className="w-full flex items-center justify-center gap-2 border border-red-500/20 text-red-500 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-500/5 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear History
+              </button>
+              <p className="text-[9px] text-apple-gray-400 font-bold uppercase tracking-widest text-center px-4 leading-relaxed">
+                ScholarMind data is only stored in your browser's private indexedDB/storage.
+              </p>
+            </div>
+          </section>
+        </div>
+
+        {/* History Preview */}
+        <section className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-apple-gray-400 flex items-center gap-2">
+            <History className="w-3 h-3" /> Full History
+          </h3>
+          <div className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-4">
+            <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-1">
+              {searchHistory.length === 0 ? (
+                <div className="py-12 text-center text-apple-gray-400 italic text-sm">No research sessions recorded.</div>
+              ) : (
+                searchHistory.map((h, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 hover:bg-apple-gray-50 dark:hover:bg-[#151515] rounded-xl transition-all group">
+                    <button 
+                      onClick={() => onSearchHistoryItem(h.query)}
+                      className="text-sm font-bold text-apple-gray-600 dark:text-apple-gray-400 hover:text-apple-blue transition-colors truncate flex-1 text-left"
+                    >
+                      {h.query}
+                    </button>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Search className="w-3.5 h-3.5 text-apple-gray-300" />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Footer info */}
+        <div className="pt-12 flex flex-col items-center gap-4 border-t border-apple-gray-100 dark:border-[#222]">
+          <div className="p-3 bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-xl shadow-black/5 dark:shadow-white/5 border border-apple-gray-100 dark:border-[#222]">
+            <GraduationCap className="w-10 h-10" />
+          </div>
+          <div className="text-center">
+            <h4 className="text-sm font-black dark:text-white">ScholarMind Pro v1.4.2</h4>
+            <p className="text-[10px] text-apple-gray-400 font-bold uppercase tracking-[0.3em] mt-1">Local Edge Distribution</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TutorialOverlay({ step, setStep, onClose }: { step: number, setStep: (s: number) => void, onClose: () => void }) {
+  const steps = [
+    {
+      title: "Welcome to the Lab",
+      content: "ScholarMind Pro is a high-rigor academic workstation. Let's walk through your new capabilities.",
+      target: null // Center modal
+    },
+    {
+      title: "Objective Search",
+      content: "Start your research here. Our engine is grounded like a library index—no 'AI small talk', just direct, synthesized facts.",
+      target: "search-input"
+    },
+    {
+      title: "Search with AI",
+      content: "Need deep reasoning? Switch to the AI Research Chat for open-ended analysis and source cross-referencing.",
+      target: "ai-chat-nav"
+    },
+    {
+      title: "The Research Hub",
+      content: "Organize your findings into projects. Every 'Snapshot' you save lives here permanently in your local archive.",
+      target: "library-nav"
+    },
+    {
+      title: "Interactive Essay Builder",
+      content: "Turn your saved snapshots into publication-ready drafts using the built-in synthesizing workspace.",
+      target: "builder-nav"
+    },
+    {
+      title: "Personalize",
+      content: "Use Settings to adjust synthesis strictness, AI personality, and your scholarly identity.",
+      target: "settings-btn"
+    }
+  ];
+
+  const current = steps[step];
+  const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
+
+  useEffect(() => {
+    if (current.target) {
+      const el = document.getElementById(current.target);
+      if (el) {
+        setHighlightRect(el.getBoundingClientRect());
+      } else {
+        setHighlightRect(null);
+      }
+    } else {
+      setHighlightRect(null);
+    }
+  }, [step]);
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-none">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={onClose} />
+      
+      {highlightRect && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute border-4 border-apple-blue rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] z-[1001]"
+          style={{
+            top: highlightRect.top - 8,
+            left: highlightRect.left - 8,
+            width: highlightRect.width + 16,
+            height: highlightRect.height + 16
+          }}
+        />
+      )}
+
+      <motion.div 
+        key={step}
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="relative z-[1002] w-full max-w-sm ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-8 shadow-2xl pointer-events-auto m-6"
+      >
+        <div className="mb-6">
+          <div className="text-[10px] font-black uppercase tracking-[0.3em] text-apple-blue mb-2">Step {step + 1} of {steps.length}</div>
+          <h2 className="text-2xl font-black tracking-tight dark:text-white leading-tight">{current.title}</h2>
+        </div>
+        
+        <p className="text-apple-gray-500 dark:text-apple-gray-400 font-medium leading-relaxed mb-8">
+          {current.content}
+        </p>
+
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={onClose}
+            className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400 hover:text-black dark:hover:text-white"
+          >
+            Skip Tour
+          </button>
+          
+          <div className="flex gap-2">
+            {step > 0 && (
+              <button 
+                onClick={() => setStep(step - 1)}
+                className="p-3 bg-apple-gray-50 dark:bg-[#151515] rounded-xl hover:scale-105 transition-all"
+              >
+                <ChevronLeft className="w-5 h-5 text-black dark:text-white" />
+              </button>
+            )}
+            <button 
+              onClick={() => {
+                if (step === steps.length - 1) {
+                  onClose();
+                } else {
+                  setStep(step + 1);
+                }
+              }}
+              className="bg-black dark:bg-white text-white dark:text-black px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-black/10"
+            >
+              {step === steps.length - 1 ? "Get Started" : "Next Step"}
+            </button>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }

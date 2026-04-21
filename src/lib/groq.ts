@@ -11,11 +11,11 @@ export interface SearchResponse {
   thinking?: string;
 }
 
-export async function scholarSearch(query: string): Promise<SearchResponse> {
+export async function scholarSearch(query: string, options?: { strictness?: string, personality?: string }): Promise<SearchResponse> {
   const res = await fetch("/api/research", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query })
+    body: JSON.stringify({ query, ...options })
   });
   
   if (!res.ok) {
