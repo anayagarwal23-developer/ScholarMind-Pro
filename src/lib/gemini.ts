@@ -27,7 +27,7 @@ export async function scholarSearch(query: string): Promise<SearchResponse> {
   if (!ai) throw new Error("Search disabled: GEMINI_API_KEY is not configured in Vercel/Deployment settings.");
   try {
     const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
     contents: [
       {
         role: "user",
@@ -35,9 +35,6 @@ export async function scholarSearch(query: string): Promise<SearchResponse> {
       }
     ],
     config: {
-      thinkingConfig: {
-        thinkingLevel: ThinkingLevel.LOW
-      },
       systemInstruction: `You are ScholarMind, a specialized research engine for academic rigor.
       Your goal is to provide deep, analytical, and authoritative answers derived from established scholarly work.
       
@@ -92,7 +89,7 @@ export async function deepDive(source: SearchSource): Promise<string> {
   if (!ai) throw new Error("Deep Analysis disabled: GEMINI_API_KEY is not configured.");
   try {
     const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: [
         {
           role: "user",
@@ -102,9 +99,6 @@ export async function deepDive(source: SearchSource): Promise<string> {
         }
       ],
       config: {
-        thinkingConfig: {
-          thinkingLevel: ThinkingLevel.HIGH
-        },
         systemInstruction: "You are a research analyst. Use the provided URL to extract all relevant scholarly information. Be precise and academic in your summary.",
         tools: [{ googleSearch: {} }] 
       }
@@ -121,7 +115,7 @@ export async function synthesizeChat(context: string, message: string, history: 
   if (!ai) throw new Error("Chat disabled: GEMINI_API_KEY is not configured.");
   try {
     const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: [
         {
           role: "user",
