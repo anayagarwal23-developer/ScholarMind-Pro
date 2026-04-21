@@ -27,7 +27,7 @@ export async function scholarSearch(query: string): Promise<SearchResponse> {
   if (!ai) throw new Error("Search disabled: GEMINI_API_KEY is not configured in Vercel/Deployment settings.");
   try {
     const result = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
     contents: [
       {
         role: "user",
@@ -89,7 +89,7 @@ export async function deepDive(source: SearchSource): Promise<string> {
   if (!ai) throw new Error("Deep Analysis disabled: GEMINI_API_KEY is not configured.");
   try {
     const result = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
       contents: [
         {
           role: "user",
@@ -115,7 +115,7 @@ export async function synthesizeChat(context: string, message: string, history: 
   if (!ai) throw new Error("Chat disabled: GEMINI_API_KEY is not configured.");
   try {
     const result = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
       contents: [
         {
           role: "user",
