@@ -57,6 +57,14 @@ export default function App() {
   const [advChatInput, setAdvChatInput] = useState('');
   const [isAdvLoading, setIsAdvLoading] = useState(false);
 
+  const [isConfigured, setIsConfigured] = useState<boolean>(true);
+
+  useEffect(() => {
+    import('./lib/groq').then(lib => {
+      lib.checkConfig().then(configured => setIsConfigured(configured));
+    });
+  }, []);
+
   // Persistence (Local Storage Only)
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -117,13 +125,13 @@ export default function App() {
       setResult(data);
     } catch (err: any) {
       console.error(err);
-      let msg = "An error occurred while performing research.";
+      let msg = err?.message || "An error occurred while performing research.";
       const errStr = err?.message?.toLowerCase() || "";
       
       if (errStr.includes('quota') || errStr.includes('exhausted') || errStr.includes('429')) {
         msg = "Groq Inference is cooling down. Please wait 10 seconds (Speed Limit).";
-      } else if (errStr.includes('400') || errStr.includes('api_key_invalid')) {
-        msg = "Groq Error: The API Key is invalid or expired. Please check your Vercel settings.";
+      } else if (errStr.includes('401') || errStr.includes('api_key_invalid') || errStr.includes('unauthorized')) {
+        msg = "Groq Error: The API Key is invalid, has extra spaces, or has expired. Please check your Vercel settings.";
       }
       setError(msg);
     } finally {
@@ -369,7 +377,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-[#000000] text-black dark:text-white transition-colors duration-300 font-sans">
-      {!process.env.GROQ_API_KEY && (
+      {!isConfigured && (
         <div className="bg-red-500 text-white text-[10px] py-1.5 px-4 text-center font-black uppercase tracking-[0.2em] sticky top-0 z-[100] animate-pulse">
           Critical: GROQ_API_KEY Missing • Research functions disabled • Configure in Deployment Settings
         </div>
