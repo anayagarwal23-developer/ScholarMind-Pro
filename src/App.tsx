@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import { scholarSearch, deepDive, synthesizeChat, advancedScholarChat, type SearchResponse, type SearchSource } from './lib/gemini';
+import { scholarSearch, deepDive, synthesizeChat, advancedScholarChat, type SearchResponse, type SearchSource } from './lib/groq';
 import { cn } from './lib/utils';
 
 interface Project {
@@ -118,10 +118,12 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       let msg = "An error occurred while performing research.";
-      if (err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED')) {
-        msg = "The neural engines are cooling down (Rate Limit). Please wait 60 seconds and try again.";
-      } else if (err?.message?.includes('400') || err?.message?.includes('API_KEY_INVALID')) {
-        msg = "Configuration Error: The API Key is invalid or expired. Please check your Vercel settings.";
+      const errStr = err?.message?.toLowerCase() || "";
+      
+      if (errStr.includes('quota') || errStr.includes('exhausted') || errStr.includes('429')) {
+        msg = "Groq Inference is cooling down. Please wait 10 seconds (Speed Limit).";
+      } else if (errStr.includes('400') || errStr.includes('api_key_invalid')) {
+        msg = "Groq Error: The API Key is invalid or expired. Please check your Vercel settings.";
       }
       setError(msg);
     } finally {
@@ -367,9 +369,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-[#000000] text-black dark:text-white transition-colors duration-300 font-sans">
-      {!process.env.GEMINI_API_KEY && (
+      {!process.env.GROQ_API_KEY && (
         <div className="bg-red-500 text-white text-[10px] py-1.5 px-4 text-center font-black uppercase tracking-[0.2em] sticky top-0 z-[100] animate-pulse">
-          Critical: GEMINI_API_KEY Missing • Research functions disabled • Configure in Deployment Settings
+          Critical: GROQ_API_KEY Missing • Research functions disabled • Configure in Deployment Settings
         </div>
       )}
       <header className="px-6 h-16 flex items-center justify-between sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-apple-gray-100 dark:border-[#222]">
@@ -841,7 +843,7 @@ export default function App() {
                       <Loader2 className="w-12 h-12 animate-spin text-apple-blue" />
                       <div className="text-center space-y-2">
                         <p className="font-medium">Contextualizing source data...</p>
-                        <p className="text-sm text-apple-gray-400">Gemini is diving deep into the methodology and claims.</p>
+                        <p className="text-sm text-apple-gray-400">Groq is synthesizing high-speed research vectors.</p>
                       </div>
                     </div>
                   ) : (
@@ -1221,7 +1223,7 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
             <div className="max-w-md">
               <h2 className="text-3xl font-black tracking-tight mb-4 dark:text-white">Advanced Scholar Chat</h2>
               <p className="text-apple-gray-400 font-medium leading-relaxed dark:text-[#444]">
-                Powered by Gemini 3.1 Pro. Integrated with Google Search and deep data analysis tools.
+                Powered by Llama-3-70B on Groq. High-speed academic reasoning and data synthesis.
                 Ask about complex datasets, academic methodology, or code synthesis.
               </p>
             </div>
