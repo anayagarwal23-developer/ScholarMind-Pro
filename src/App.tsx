@@ -117,7 +117,13 @@ export default function App() {
       setResult(data);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "An error occurred while performing research. Our neural engines are recalibrating.");
+      let msg = "An error occurred while performing research.";
+      if (err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED')) {
+        msg = "The neural engines are cooling down (Rate Limit). Please wait 60 seconds and try again.";
+      } else if (err?.message?.includes('400') || err?.message?.includes('API_KEY_INVALID')) {
+        msg = "Configuration Error: The API Key is invalid or expired. Please check your Vercel settings.";
+      }
+      setError(msg);
     } finally {
       setIsSearching(false);
     }
@@ -131,7 +137,11 @@ export default function App() {
       const res = await deepDive(source);
       setAnalysisResult(res);
     } catch (err: any) {
-      setAnalysisResult(`Error: ${err?.message || "Failed to analyze source deeply."}`);
+      let msg = "Failed to analyze source deeply.";
+      if (err?.message?.includes('429')) {
+        msg = "Deep Dive engines are resting (Rate Limit). Please wait a moment.";
+      }
+      setAnalysisResult(`Error: ${msg}`);
     } finally {
       setIsAnalyzing(false);
     }
