@@ -319,7 +319,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-white dark:bg-[#000000] text-black dark:text-white transition-colors duration-300 font-sans">
       {!isConfigured && (
         <div className="bg-red-500 text-white text-[10px] py-1.5 px-4 text-center font-black uppercase tracking-[0.2em] sticky top-0 z-[100] animate-pulse">
-          Critical: GROQ_API_KEY Missing • Add it to "Secrets" in the AI Studio Settings menu to enable research.
+          Critical: GROQ_API_KEY Missing - Add it to "Secrets" in the AI Studio Settings menu to enable research.
         </div>
       )}
       <header className="px-6 h-16 flex items-center justify-between sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-apple-gray-100 dark:border-[#222]">
@@ -487,7 +487,7 @@ export default function App() {
                       Initialize Workspace
                     </button>
                     <p className="text-[9px] text-apple-gray-400 font-bold uppercase tracking-widest text-center">
-                      No sign-up required • Stored 100% locally
+                      No sign-up required - Stored 100% locally
                     </p>
                   </div>
                 </form>
@@ -853,7 +853,7 @@ function LibraryView({ projects, savedResearch, activeProject, setActiveProject,
                     
                     <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-apple-blue">
                       <Sparkles className="w-3 h-3" />
-                      Scholarly Snapshot • {new Date(item.savedAt).toLocaleDateString()}
+                      Scholarly Snapshot - {new Date(item.savedAt).toLocaleDateString()}
                     </div>
                     
                     <h4 className="text-2xl font-black tracking-tight dark:text-white line-clamp-2">{item.title}</h4>
