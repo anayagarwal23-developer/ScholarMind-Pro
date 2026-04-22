@@ -2,7 +2,7 @@ import express from "express";
 import "dotenv/config";
 import path from "path";
 import { fileURLToPath } from "url";
-import app from "./api/index.js"; // Reuse the API logic
+import app from "./api/index.ts"; // Use .ts extension for native resolution
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
