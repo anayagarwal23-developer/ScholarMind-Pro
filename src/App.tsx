@@ -142,7 +142,10 @@ export default function App() {
     try {
       setSearchHistory(prev => [{ query: targetQuery, timestamp: Date.now() }, ...prev].slice(0, 20));
       
-      const data = await scholarSearch(targetQuery, { strictness: searchStrictness, personality: aiPersonality });
+      // Strict sanitization of query to prevent ByteString errors on Vercel
+      const sanitizedQuery = targetQuery.replace(/[^\x00-\x7F]/g, " ").trim();
+      
+      const data = await scholarSearch(sanitizedQuery, { strictness: searchStrictness, personality: aiPersonality });
       setResult(data);
 
       if (autoSaveResearch) {
@@ -221,7 +224,9 @@ export default function App() {
         role: m.role, 
         parts: [{ text: m.content }] 
       }));
-      const response = await advancedScholarChat(userMsg, history);
+      // Sanitize input
+      const sanitizedMsg = userMsg.replace(/[^\x00-\x7F]/g, " ").trim();
+      const response = await advancedScholarChat(sanitizedMsg, history);
       setAdvChatMessages(prev => [...prev, { role: 'model', content: response }]);
     } catch (err) {
       setAdvChatMessages(prev => [...prev, { role: 'model', content: "Advanced analysis failed. Please verify your connection." }]);
@@ -603,7 +608,7 @@ export default function App() {
       <footer className="h-14 flex items-center justify-between px-8 border-t border-apple-gray-50 bg-apple-gray-50/30 text-[10px] text-apple-gray-400 uppercase tracking-widest font-black">
         <div className="flex gap-6">
           <span>Think Different Research</span>
-          <span>© 2026 ScholarMind Pro</span>
+          <span>(c) 2026 ScholarMind Pro</span>
         </div>
         <div className="flex gap-6">
           <span className="hover:text-black cursor-pointer transition-colors">Methodology</span>
@@ -888,12 +893,13 @@ function EssayBuilderView({ researchItems, content, setContent, isDrafting, setI
 }) {
   const handleDraft = async () => {
     setIsDrafting(true);
-    const context = researchItems.map(r => `SOURCE: ${r.title}\nCONTENT: ${r.content}`).join('\n\n');
+    // Sanitize context and query
+    const cleanContext = researchItems.map(r => `SOURCE: ${r.title}\nCONTENT: ${r.content}`).join('\n\n').replace(/[^\x00-\x7F]/g, " ");
     try {
       const res = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: `Using these research snapshots, write a structured scholarly essay: \n\n${context}` })
+        body: JSON.stringify({ query: `Using these research snapshots, write a structured scholarly essay: \n\n${cleanContext}`.replace(/[^\x00-\x7F]/g, " ") })
       });
       const data = await res.json();
       setContent(data.answer);
@@ -1300,7 +1306,7 @@ function TutorialOverlay({ step, setStep, onClose }: { step: number, setStep: (s
     },
     {
       title: "Objective Search",
-      content: "Start your research here. Our engine is grounded like a library index—no 'AI small talk', just direct, synthesized facts.",
+      content: "Start your research here. Our engine is grounded like a library index -- no 'AI small talk', just direct, synthesized facts.",
       target: "search-input"
     },
     {
