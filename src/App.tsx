@@ -756,7 +756,7 @@ function SearchResults({ isSearching, result, error, onSaveSnapshot, onBack }: {
 
             <div className="flex items-center gap-2 text-[10px] text-apple-gray-400 font-extrabold uppercase tracking-[0.2em] justify-center pt-8 border-t border-apple-gray-50 dark:border-[#222]">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              Source: Internal Scholarly Llama-3-70B Logic
+              Source: Internal Scholarly Gemini-3.1-Flash-Lite Logic
             </div>
           </motion.div>
         ) : null}
@@ -982,7 +982,7 @@ function AdvancedChatView({ messages, input, setInput, onSend, isLoading }: {
             <div className="max-w-md">
               <h2 className="text-3xl font-black tracking-tight mb-4 dark:text-white">Advanced AI Reasoning</h2>
               <p className="text-apple-gray-400 font-medium leading-relaxed dark:text-[#444]">
-                Direct neural interface with ScholarMind's Llama-3-70B edge processing.
+                Direct neural interface with ScholarMind's Gemini-3.1-Flash-Lite edge processing.
               </p>
             </div>
           </div>
@@ -1182,7 +1182,7 @@ function SettingsView({
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-xs font-bold text-apple-gray-500 block">Search Strictness</span>
-                  <span className="text-[9px] text-apple-gray-400 uppercase tracking-widest font-bold">Llama-3 Filtering</span>
+                  <span className="text-[9px] text-apple-gray-400 uppercase tracking-widest font-bold">Gemini Filtering</span>
                 </div>
                 <select 
                   value={strictness}
