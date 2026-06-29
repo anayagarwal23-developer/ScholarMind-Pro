@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, ChevronLeft, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User, HelpCircle, Info, Globe, Palette, Shield, Eye, Type, Maximize2, Zap, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import { scholarSearch, deepDive, synthesizeChat, advancedScholarChat, type SearchResponse, type SearchSource } from './lib/groq';
+import { scholarSearch, deepDive, synthesizeChat, advancedScholarChat, type SearchResponse, type SearchSource } from './lib/gemini';
 import { cn } from './lib/utils';
 
 interface Project {
@@ -66,7 +66,7 @@ export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    import('./lib/groq').then(lib => {
+    import('./lib/gemini').then(lib => {
       lib.checkConfig().then(configured => setIsConfigured(configured));
     });
 
@@ -157,9 +157,9 @@ export default function App() {
       const errStr = err?.message?.toLowerCase() || "";
       
       if (errStr.includes('quota') || errStr.includes('exhausted') || errStr.includes('429')) {
-        msg = "Groq Inference is cooling down. Please wait 10 seconds (Speed Limit).";
+        msg = "Gemini Inference is cooling down. Please wait a moment.";
       } else if (errStr.includes('401') || errStr.includes('api_key_invalid') || errStr.includes('unauthorized')) {
-        msg = "Groq Error: The API Key is invalid, has extra spaces, or has expired. Please check your Vercel settings.";
+        msg = "Gemini Error: The API Key is invalid or expired. Please check your AI Studio secrets.";
       }
       setError(msg);
     } finally {
@@ -324,7 +324,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-white dark:bg-[#000000] text-black dark:text-white transition-colors duration-300 font-sans">
       {!isConfigured && (
         <div className="bg-red-500 text-white text-[10px] py-1.5 px-4 text-center font-black uppercase tracking-[0.2em] sticky top-0 z-[100] animate-pulse">
-          Critical: GROQ_API_KEY Missing - Add it to "Secrets" in the AI Studio Settings menu to enable research.
+          Critical: GEMINI_API_KEY Missing - Add it to "Secrets" in the AI Studio Settings menu to enable research.
         </div>
       )}
       <header className="px-6 h-16 flex items-center justify-between sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-apple-gray-100 dark:border-[#222]">

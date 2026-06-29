@@ -1,43 +1,48 @@
 import express from "express";
 import "dotenv/config";
-import Groq from "groq-sdk";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 app.use(express.json());
 
-// Hyper-strict sanitization
-const getSanitizedKey = () => {
-  const raw = process.env.GROQ_API_KEY || "";
-  // Remove EVERYTHING that isn't a basic ASCII character (32-126)
-  return raw.replace(/[^\x20-\x7E]/g, "").trim();
-};
-
-const getGroqClient = () => {
-  const key = getSanitizedKey();
-  if (!key) return null;
-  return new Groq({ apiKey: key });
+// Initialize Gemini Helper
+const getGeminiClient = () => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || "";
+  if (!apiKey) return null;
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 };
 
 // API Routes
 app.get("/api/config", (req, res) => {
-  res.json({ hasGroqKey: !!getSanitizedKey() });
+  const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  res.json({ hasGeminiKey: !!rawKey && rawKey.trim().length > 0 });
 });
 
 app.post("/api/research", async (req, res) => {
   const { query, strictness, personality } = req.body;
-  const groq = getGroqClient();
-  if (!groq) return res.status(500).json({ error: "GROQ_API_KEY is missing or invalid." });
+  const ai = getGeminiClient();
+  if (!ai) return res.status(500).json({ error: "GEMINI_API_KEY is missing or invalid." });
 
-  let systemPrompt = "You are an objective, informational research engine. Summarize scholarly consensus.";
-  if (strictness === 'strict') systemPrompt += " Be extremely rigorous.";
-  if (personality === 'analytical') systemPrompt += " Use methodical tone.";
+  let systemInstruction = "You are an objective, informational academic research engine. Summarize scholarly consensus.";
+  if (strictness === 'strict') systemInstruction += " Be extremely rigorous.";
+  if (personality === 'analytical') systemInstruction += " Use methodical tone.";
 
   try {
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "system", content: systemPrompt }, { role: "user", content: query }],
-      model: "llama-3.3-70b-versatile",
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: query,
+      config: {
+        systemInstruction,
+      }
     });
-    res.json({ answer: completion.choices[0]?.message?.content || "No result." });
+    res.json({ answer: response.text || "No result." });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -45,14 +50,17 @@ app.post("/api/research", async (req, res) => {
 
 app.post("/api/deep-dive", async (req, res) => {
   const { source } = req.body;
-  const groq = getGroqClient();
-  if (!groq) return res.status(500).json({ error: "GROQ_API_KEY not configured." });
+  const ai = getGeminiClient();
+  if (!ai) return res.status(500).json({ error: "GEMINI_API_KEY not configured." });
   try {
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "system", content: "Analyze methodology." }, { role: "user", content: `Analyze: ${source.title}` }],
-      model: "llama-3.1-8b-instant",
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: `Analyze: ${source.title}`,
+      config: {
+        systemInstruction: "Analyze methodology."
+      }
     });
-    res.json({ analysis: completion.choices[0]?.message?.content || "Analysis failed." });
+    res.json({ analysis: response.text || "Analysis failed." });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -60,16 +68,25 @@ app.post("/api/deep-dive", async (req, res) => {
 
 app.post("/api/chat", async (req, res) => {
   const { context, message, history } = req.body;
-  const groq = getGroqClient();
-  if (!groq) return res.status(500).json({ error: "GROQ_API_KEY not configured." });
+  const ai = getGeminiClient();
+  if (!ai) return res.status(500).json({ error: "GEMINI_API_KEY not configured." });
   try {
-    const messages = [
-      { role: "system", content: `Context: ${context}` },
-      ...history.map((h: any) => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.content })),
-      { role: "user", content: message }
+    const contents = [
+      ...history.map((h: any) => ({
+        role: h.role === 'model' || h.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: h.content }]
+      })),
+      { role: "user", parts: [{ text: message }] }
     ];
-    const completion = await groq.chat.completions.create({ messages, model: "llama-3.3-70b-versatile" });
-    res.json({ response: completion.choices[0]?.message?.content || "Chat failed." });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents,
+      config: {
+        systemInstruction: `Context: ${context}`
+      }
+    });
+    res.json({ response: response.text || "Chat failed." });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

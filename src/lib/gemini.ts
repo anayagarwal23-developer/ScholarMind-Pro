@@ -1,4 +1,4 @@
-// Client-side library to interact with our secure Groq backend
+// Client-side library to interact with our secure Gemini backend
 export interface SearchSource {
   title: string;
   url: string;
@@ -26,8 +26,8 @@ export async function scholarSearch(query: string, options?: { strictness?: stri
   const data = await res.json();
   return {
     answer: data.answer,
-    sources: [{ title: "Internal Academic Index", url: "https://groq.com", snippet: "High-speed Llama-3-70B synthesis." }],
-    thinking: "Groq Speed Active"
+    sources: [{ title: "Internal Academic Index", url: "https://gemini.google.com", snippet: "High-speed Gemini synthesis." }],
+    thinking: "Gemini Engine Active"
   };
 }
 
@@ -64,7 +64,7 @@ export async function checkConfig(): Promise<boolean> {
   try {
     const res = await fetch("/api/config");
     const data = await res.json();
-    return data.hasGroqKey;
+    return data.hasGeminiKey;
   } catch {
     return false;
   }
