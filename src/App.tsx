@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, ChevronLeft, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User, HelpCircle, Info, Globe, Palette, Shield, Eye, Type, Maximize2, Zap, Layout } from 'lucide-react';
+import { Search, Loader2, BookOpen, ExternalLink, ChevronRight, ChevronLeft, GraduationCap, Bookmark, FolderPlus, Download, Trash2, Library, Sparkles, X, History, Settings, LogOut, Sun, Moon, User, HelpCircle, Info, Globe, Palette, Shield, Eye, Type, Maximize2, Zap, Layout, Copy, Edit, Check, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { scholarSearch, deepDive, synthesizeChat, advancedScholarChat, type SearchResponse, type SearchSource } from './lib/gemini';
@@ -61,6 +61,24 @@ export default function App() {
   const [essayContent, setEssayContent] = useState('');
   const [isDrafting, setIsDrafting] = useState(false);
   const [essayStep, setEssayStep] = useState<'topic' | 'structure' | 'draft'>('topic');
+
+  // Custom dialog/modal & toast states for high-rigor iframe operation
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' }[]>([]);
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
 
   // Persistence (Local Storage Only)
   const [isInitialized, setIsInitialized] = useState(false);
@@ -177,18 +195,23 @@ export default function App() {
       savedAt: Date.now()
     };
     setSavedResearch(prev => [newResearch, ...prev]);
-    alert("Research snapshot saved to your Library.");
+    addToast("Research snapshot saved to your Library.", "success");
   };
 
   const handleRemoveResearch = (id: string) => {
     setSavedResearch(prev => prev.filter(r => r.id !== id));
+    addToast("Snapshot removed from library.", "info");
+  };
+
+  const handleUpdateResearch = (updatedItem: SavedResearch) => {
+    setSavedResearch(prev => prev.map(r => r.id === updatedItem.id ? updatedItem : r));
+    addToast("Research snapshot updated successfully.", "success");
   };
 
   const handleClearHistory = () => {
-    if (window.confirm("Delete all search history?")) {
-      setSearchHistory([]);
-      localStorage.removeItem('sm_history');
-    }
+    setSearchHistory([]);
+    localStorage.removeItem('sm_history');
+    addToast("Search history cleared.", "info");
   };
 
   const startTutorial = () => {
@@ -198,16 +221,33 @@ export default function App() {
     setShowTutorial(true);
   };
 
-  const handleCreateProject = () => {
-    const name = prompt("Project Name?");
-    if (name) {
+  const handleCreateProject = (name: string) => {
+    if (name.trim()) {
       const newProject: Project = {
         id: Math.random().toString(36).substring(7),
-        name,
+        name: name.trim(),
         createdAt: Date.now()
       };
       setProjects([...projects, newProject]);
+      addToast(`Collection "${name.trim()}" created.`, "success");
     }
+  };
+
+  const handleRemoveProject = (projectId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Collection",
+      message: "Are you sure you want to delete this collection? Saved research items will not be deleted but will be moved to 'All Research'.",
+      onConfirm: () => {
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+        setSavedResearch(prev => prev.map(r => r.projectId === projectId ? { ...r, projectId: 'all' } : r));
+        if (activeProjectId === projectId) {
+          setActiveProjectId('all');
+        }
+        addToast("Collection deleted", "info");
+        setConfirmModal(null);
+      }
+    });
   };
 
   const handleAdvChat = async (e: React.FormEvent) => {
@@ -235,17 +275,7 @@ export default function App() {
     }
   };
 
-  const createProject = () => {
-    const name = prompt("Project Name?");
-    if (name) {
-      const newProject: Project = {
-        id: Math.random().toString(36).substr(2, 9),
-        name,
-        createdAt: Date.now()
-      };
-      setProjects([...projects, newProject]);
-    }
-  };
+
 
   const toggleTheme = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -270,10 +300,16 @@ export default function App() {
 
   const handleLogout = (e?: React.MouseEvent) => {
     e?.preventDefault();
-    if (window.confirm("Sign out of your local workspace? Library data will stay on this device.")) {
-      setProfile(null);
-      // Brief visual feedback if needed
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Sign Out",
+      message: "Sign out of your local workspace? Library data will stay on this device.",
+      onConfirm: () => {
+        setProfile(null);
+        addToast("Signed out from workspace.", "info");
+        setConfirmModal(null);
+      }
+    });
   };
 
   const exportWorkspace = () => {
@@ -293,6 +329,7 @@ export default function App() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    addToast("Backup downloaded.", "success");
   };
 
   const importWorkspace = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -309,12 +346,12 @@ export default function App() {
           setSearchHistory(data.searchHistory || []);
           setTheme(data.theme || 'light');
           setProfile(data.profile || null);
-          alert("Workspace restored successfully!");
+          addToast("Workspace restored successfully!", "success");
         } else {
-          alert("Invalid backup file format.");
+          addToast("Invalid backup file format.", "error");
         }
       } catch (err) {
-        alert("Failed to parse backup file.");
+        addToast("Failed to parse backup file.", "error");
       }
     };
     reader.readAsText(file);
@@ -539,6 +576,9 @@ export default function App() {
                 setActiveProject={setActiveProjectId}
                 onRemoveResearch={handleRemoveResearch}
                 onCreateProject={handleCreateProject}
+                onRemoveProject={handleRemoveProject}
+                onUpdateResearch={handleUpdateResearch}
+                addToast={addToast}
                 onOpenEssayBuilder={() => setView('essay-builder')}
               />
             </div>
@@ -554,6 +594,7 @@ export default function App() {
                 setContent={setEssayContent}
                 isDrafting={isDrafting}
                 setIsDrafting={setIsDrafting}
+                addToast={addToast}
               />
             </div>
           ) : view === 'settings' ? (
@@ -615,6 +656,78 @@ export default function App() {
           <span className="hover:text-black cursor-pointer transition-colors">Privacy & Rigor</span>
         </div>
       </footer>
+
+      {/* Custom Toast Notifications */}
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm pointer-events-none">
+        <AnimatePresence>
+          {toasts.map(t => (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className={cn(
+                "p-4 rounded-2xl shadow-xl border flex items-center gap-3 backdrop-blur-md pointer-events-auto",
+                t.type === 'success' && "bg-emerald-500/90 dark:bg-emerald-950/90 border-emerald-500/20 text-white",
+                t.type === 'error' && "bg-red-500/90 dark:bg-red-950/90 border-red-500/20 text-white",
+                t.type === 'info' && "bg-[#1d1d1f]/90 dark:bg-[#151515]/90 border-apple-gray-200/20 text-white"
+              )}
+            >
+              <span className="text-xs font-black uppercase tracking-wider">{t.message}</span>
+              <button 
+                onClick={() => setToasts(prev => prev.filter(item => item.id !== t.id))}
+                className="ml-auto text-white/60 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Custom Confirm Modal */}
+      <AnimatePresence>
+        {confirmModal && confirmModal.isOpen && (
+          <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmModal(null)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative z-10 w-full max-w-md bg-white dark:bg-[#0a0a0a] border border-apple-gray-150 dark:border-white/10 rounded-3xl p-8 shadow-2xl space-y-6"
+            >
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black tracking-tight dark:text-white">{confirmModal.title}</h3>
+                <p className="text-sm text-apple-gray-500 dark:text-apple-gray-400 font-medium leading-relaxed">
+                  {confirmModal.message}
+                </p>
+              </div>
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(null)}
+                  className="px-6 py-3 rounded-xl border border-apple-gray-200 dark:border-white/10 text-xs font-black uppercase tracking-widest text-apple-gray-500 dark:text-apple-gray-400 hover:bg-apple-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmModal.onConfirm}
+                  className="px-6 py-3 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-black uppercase tracking-widest hover:bg-apple-blue dark:hover:bg-apple-blue hover:text-white dark:hover:text-white transition-colors cursor-pointer shadow-lg shadow-black/10 dark:shadow-white/5"
+                >
+                  Confirm
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -635,7 +748,7 @@ function Hero({ onSearch, query, setQuery, onOpenAiChat }: { onSearch: (e: React
         className="text-center mb-16"
       >
         <h1 className="text-6xl md:text-8xl font-black mb-8 tracking-tighter leading-[0.9] dark:text-white text-apple-gray-900">
-          ScholarMind. <br /><span className="bg-clip-text text-transparent bg-gradient-to-r from-apple-blue to-emerald-500">Pro.</span>
+          ScholarMind <br /><span className="bg-clip-text text-transparent bg-gradient-to-r from-apple-blue to-emerald-500">Pro</span>
         </h1>
         <p className="text-xl text-apple-gray-400 font-medium max-w-xl mx-auto dark:text-apple-gray-400">
           The world's most powerful academic search engine. Minimalist by design, rigorous by nature.
@@ -765,23 +878,61 @@ function SearchResults({ isSearching, result, error, onSaveSnapshot, onBack }: {
   );
 }
 
-function LibraryView({ projects, savedResearch, activeProject, setActiveProject, onRemoveResearch, onCreateProject, onOpenEssayBuilder }: { 
+function LibraryView({ projects, savedResearch, activeProject, setActiveProject, onRemoveResearch, onCreateProject, onRemoveProject, onUpdateResearch, addToast, onOpenEssayBuilder }: { 
   projects: Project[], 
   savedResearch: SavedResearch[], 
-  activeProject: string,
-  setActiveProject: (id: string) => void,
-  onRemoveResearch: (id: string) => void,
-  onCreateProject: () => void,
-  onOpenEssayBuilder: () => void
+  activeProject: string, 
+  setActiveProject: (id: string) => void, 
+  onRemoveResearch: (id: string) => void, 
+  onCreateProject: (name: string) => void, 
+  onRemoveProject: (id: string) => void,
+  onUpdateResearch: (updatedItem: SavedResearch) => void,
+  addToast: (message: string, type?: 'success' | 'error' | 'info') => void,
+  onOpenEssayBuilder: () => void 
 }) {
   const filtered = activeProject === 'all' ? savedResearch : savedResearch.filter(r => r.projectId === activeProject);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+
+  // Selected item modal states
+  const [viewingItem, setViewingItem] = useState<SavedResearch | null>(null);
+  const [isEditingContent, setIsEditingContent] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedContent, setEditedContent] = useState('');
+  const [editedProjectId, setEditedProjectId] = useState('');
+
+  const handleOpenViewer = (item: SavedResearch) => {
+    setViewingItem(item);
+    setEditedTitle(item.title);
+    setEditedContent(item.content);
+    setEditedProjectId(item.projectId);
+    setIsEditingContent(false);
+  };
+
+  const handleSaveEditedSnapshot = () => {
+    if (!viewingItem) return;
+    const updated: SavedResearch = {
+      ...viewingItem,
+      title: editedTitle.trim(),
+      content: editedContent,
+      projectId: editedProjectId
+    };
+    onUpdateResearch(updated);
+    setViewingItem(updated); // Update viewing modal content dynamically
+    setIsEditingContent(false);
+  };
+
+  const handleCopyContent = (text: string) => {
+    navigator.clipboard.writeText(text);
+    addToast("Copied to clipboard!", "success");
+  };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-apple-gray-50/30 dark:bg-black overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-apple-gray-50/30 dark:bg-black overflow-hidden relative">
       <div className="flex h-full">
         {/* Sidebar */}
-        <aside className="w-72 border-r border-apple-gray-100 dark:border-[#222] p-8 space-y-10 bg-white dark:bg-[#050505]">
-          <div className="space-y-4">
+        <aside className="w-72 border-r border-apple-gray-100 dark:border-[#222] p-8 space-y-10 bg-white dark:bg-[#050505] flex flex-col justify-between">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
             <h3 className="text-[10px] font-black tracking-[0.2em] text-apple-gray-400 uppercase ml-2">Collections</h3>
             <div className="space-y-1">
               <button 
@@ -792,22 +943,85 @@ function LibraryView({ projects, savedResearch, activeProject, setActiveProject,
                 All Research
               </button>
               {projects.map(p => (
-                <button 
+                <div 
                   key={p.id}
-                  onClick={() => setActiveProject(p.id)}
-                  className={cn("w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all", 
-                    activeProject === p.id ? "bg-black text-white dark:bg-white dark:text-black shadow-lg" : "text-apple-gray-400 hover:bg-apple-gray-50 dark:hover:bg-[#111]")}
+                  className={cn(
+                    "group relative w-full flex items-center justify-between rounded-2xl text-sm font-bold transition-all",
+                    activeProject === p.id 
+                      ? "bg-black text-white dark:bg-white dark:text-black shadow-lg" 
+                      : "text-apple-gray-400 hover:bg-apple-gray-50 dark:hover:bg-[#111]"
+                  )}
                 >
-                  {p.name}
-                </button>
+                  <button 
+                    onClick={() => setActiveProject(p.id)}
+                    className="flex-1 text-left px-4 py-3 cursor-pointer"
+                  >
+                    {p.name}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveProject(p.id);
+                    }}
+                    className={cn(
+                      "p-2 mr-2 rounded-lg hover:bg-red-500/20 hover:text-red-500 transition-colors cursor-pointer",
+                      activeProject === p.id ? "text-white/70 hover:text-white" : "opacity-0 group-hover:opacity-100 transition-opacity"
+                    )}
+                    title="Delete Collection"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               ))}
-              <button 
-                onClick={onCreateProject}
-                className="w-full text-left px-4 py-3 rounded-2xl text-sm font-bold text-apple-blue hover:bg-apple-blue/5 transition-all flex items-center gap-2"
-              >
-                <FolderPlus className="w-4 h-4" />
-                New Collection
-              </button>
+              {isCreating ? (
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newProjectName.trim()) {
+                      onCreateProject(newProjectName);
+                      setNewProjectName('');
+                      setIsCreating(false);
+                    }
+                  }}
+                  className="p-2 space-y-2"
+                >
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="Collection name..."
+                    autoFocus
+                    className="w-full px-3 py-2 text-xs font-medium border border-apple-gray-250 dark:border-white/10 dark:text-white rounded-xl bg-transparent focus:outline-none focus:border-apple-blue transition-colors"
+                  />
+                  <div className="flex gap-1.5 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreating(false);
+                        setNewProjectName('');
+                      }}
+                      className="px-2.5 py-1 text-[10px] font-bold text-apple-gray-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!newProjectName.trim()}
+                      className="px-2.5 py-1 text-[10px] font-bold text-white bg-apple-blue hover:bg-apple-blue/90 disabled:opacity-50 transition-all rounded-lg cursor-pointer"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button 
+                  onClick={() => setIsCreating(true)}
+                  className="w-full text-left px-4 py-3 rounded-2xl text-sm font-bold text-apple-blue hover:bg-apple-blue/5 transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  New Collection
+                </button>
+              )}
             </div>
           </div>
 
@@ -847,11 +1061,15 @@ function LibraryView({ projects, savedResearch, activeProject, setActiveProject,
                     key={item.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-8 space-y-6 group relative"
+                    className="ios-card bg-white dark:bg-[#0a0a0a] dark:border-[#222] p-8 space-y-6 group relative hover:shadow-xl hover:border-apple-gray-250 dark:hover:border-white/20 transition-all duration-300"
                   >
                     <button 
-                      onClick={() => onRemoveResearch(item.id)}
-                      className="absolute top-8 right-8 p-2 text-apple-gray-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveResearch(item.id);
+                      }}
+                      className="absolute top-6 right-6 p-2 rounded-xl text-apple-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all cursor-pointer z-10"
+                      title="Delete Snapshot"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -861,15 +1079,26 @@ function LibraryView({ projects, savedResearch, activeProject, setActiveProject,
                       Scholarly Snapshot - {new Date(item.savedAt).toLocaleDateString()}
                     </div>
                     
-                    <h4 className="text-2xl font-black tracking-tight dark:text-white line-clamp-2">{item.title}</h4>
+                    <h4 
+                      onClick={() => handleOpenViewer(item)}
+                      className="text-2xl font-black tracking-tight dark:text-white line-clamp-2 cursor-pointer hover:text-apple-blue transition-colors"
+                    >
+                      {item.title}
+                    </h4>
                     
-                    <div className="prose prose-neutral dark:prose-invert max-w-none line-clamp-4 text-sm opacity-60">
+                    <div 
+                      onClick={() => handleOpenViewer(item)}
+                      className="prose prose-neutral dark:prose-invert max-w-none line-clamp-4 text-sm opacity-60 cursor-pointer"
+                    >
                       <ReactMarkdown>{item.content}</ReactMarkdown>
                     </div>
 
                     <div className="pt-6 border-t border-apple-gray-50 dark:border-[#222] flex items-center justify-between">
                       <span className="text-[10px] text-apple-gray-400 font-bold italic">Query: "{item.query}"</span>
-                      <button className="text-[10px] font-black uppercase tracking-widest text-[#1d1d1f] dark:text-white underline decoration-apple-blue decoration-2 underline-offset-4">
+                      <button 
+                        onClick={() => handleOpenViewer(item)}
+                        className="text-[10px] font-black uppercase tracking-widest text-[#1d1d1f] dark:text-white underline decoration-apple-blue decoration-2 underline-offset-4 cursor-pointer hover:text-apple-blue transition-colors"
+                      >
                         Read Full Findings
                       </button>
                     </div>
@@ -880,16 +1109,204 @@ function LibraryView({ projects, savedResearch, activeProject, setActiveProject,
           </div>
         </main>
       </div>
+
+      {/* Advanced Research Snapshot Detailed Modal */}
+      <AnimatePresence>
+        {viewingItem && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setViewingItem(null);
+                setIsEditingContent(false);
+              }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative z-10 w-full max-w-4xl max-h-[85vh] bg-white dark:bg-[#0a0a0a] border border-apple-gray-200 dark:border-white/10 rounded-[32px] shadow-2xl overflow-hidden flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-8 border-b border-apple-gray-100 dark:border-white/10 flex items-center justify-between bg-apple-gray-50/50 dark:bg-[#0f0f0f]">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-apple-blue">
+                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                    <span>Active Scholar Workspace</span>
+                  </div>
+                  <h3 className="text-xl font-black tracking-tight dark:text-white">
+                    {isEditingContent ? "Editing Snapshot" : "Reviewing Findings"}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleCopyContent(isEditingContent ? editedContent : viewingItem.content)}
+                    className="p-3 bg-apple-gray-100 hover:bg-apple-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-apple-gray-600 dark:text-apple-gray-300 rounded-2xl transition-all cursor-pointer"
+                    title="Copy to Clipboard"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Are you sure you want to delete this snapshot?")) {
+                        onRemoveResearch(viewingItem.id);
+                        setViewingItem(null);
+                      }
+                    }}
+                    className="p-3 hover:bg-red-500/10 hover:text-red-500 text-apple-gray-400 rounded-2xl transition-all cursor-pointer"
+                    title="Delete Snapshot"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setViewingItem(null);
+                      setIsEditingContent(false);
+                    }}
+                    className="p-3 hover:bg-apple-gray-100 dark:hover:bg-white/5 text-apple-gray-400 rounded-2xl transition-all cursor-pointer"
+                  >
+                    <X className="w-5 h-5 dark:text-white" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Main Content */}
+              <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+                {isEditingContent ? (
+                  <div className="space-y-6">
+                    {/* Edit Fields */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400">Snapshot Title</label>
+                      <input
+                        type="text"
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        className="w-full bg-apple-gray-50 dark:bg-white/5 border border-apple-gray-200 dark:border-white/10 rounded-2xl py-3 px-5 text-base font-bold outline-none focus:border-apple-blue dark:text-white transition-colors"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Move collection */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400">Collection</label>
+                        <select
+                          value={editedProjectId}
+                          onChange={(e) => setEditedProjectId(e.target.value)}
+                          className="w-full bg-apple-gray-50 dark:bg-white/5 border border-apple-gray-200 dark:border-white/10 rounded-2xl py-3 px-5 text-sm font-bold outline-none focus:border-apple-blue dark:text-white transition-colors cursor-pointer"
+                        >
+                          <option value="all">Unassigned (All Research)</option>
+                          {projects.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400">Associated Query</label>
+                        <div className="bg-apple-gray-50 dark:bg-white/5 border border-apple-gray-200 dark:border-white/10 rounded-2xl py-3 px-5 text-xs font-bold text-apple-gray-400 dark:text-apple-gray-500 italic">
+                          "{viewingItem.query}"
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-apple-gray-400">Content (Markdown format supported)</label>
+                      <textarea
+                        rows={12}
+                        value={editedContent}
+                        onChange={(e) => setEditedContent(e.target.value)}
+                        className="w-full bg-apple-gray-50 dark:bg-white/5 border border-apple-gray-200 dark:border-white/10 rounded-2xl p-5 text-sm font-medium outline-none focus:border-apple-blue dark:text-white transition-colors resize-none font-mono"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* View Details */}
+                    <div>
+                      <h4 className="text-3xl font-black tracking-tight dark:text-white mb-2">{viewingItem.title}</h4>
+                      <div className="flex flex-wrap gap-4 items-center text-xs font-bold text-apple-gray-400">
+                        <span className="bg-apple-gray-50 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-apple-gray-200 dark:border-white/10 text-apple-blue font-extrabold uppercase tracking-wider text-[10px]">
+                          Collection: {projects.find(p => p.id === viewingItem.projectId)?.name || "Unassigned"}
+                        </span>
+                        <span>•</span>
+                        <span>Saved: {new Date(viewingItem.savedAt).toLocaleString()}</span>
+                        <span>•</span>
+                        <span className="italic">Query: "{viewingItem.query}"</span>
+                      </div>
+                    </div>
+
+                    {/* Markdown Renderer Area */}
+                    <div className="p-8 border border-apple-gray-150 dark:border-white/5 bg-apple-gray-50/20 dark:bg-black rounded-3xl">
+                      <div className="prose prose-neutral dark:prose-invert max-w-none 
+                        prose-p:text-base prose-p:leading-relaxed prose-p:font-medium
+                        prose-headings:font-black prose-headings:tracking-tighter
+                        prose-strong:text-apple-blue prose-strong:font-black
+                        prose-blockquote:border-l-4 prose-blockquote:border-apple-blue prose-blockquote:bg-apple-blue/5 prose-blockquote:p-6 prose-blockquote:rounded-r-3xl">
+                        <ReactMarkdown>{viewingItem.content}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-6 border-t border-apple-gray-100 dark:border-white/10 bg-apple-gray-50/50 dark:bg-[#0f0f0f] flex justify-end gap-3">
+                {isEditingContent ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingContent(false)}
+                      className="px-6 py-3 rounded-xl border border-apple-gray-200 dark:border-white/10 text-xs font-black uppercase tracking-widest text-apple-gray-500 hover:bg-apple-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveEditedSnapshot}
+                      className="px-6 py-3 rounded-xl bg-apple-blue text-white text-xs font-black uppercase tracking-widest hover:bg-apple-blue/90 transition-colors cursor-pointer shadow-lg shadow-apple-blue/15 flex items-center gap-2"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      Save Changes
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingContent(true)}
+                      className="px-6 py-3 rounded-xl border border-apple-gray-250 dark:border-white/10 text-xs font-black uppercase tracking-widest text-apple-gray-600 dark:text-apple-gray-300 hover:bg-apple-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      Edit Snapshot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewingItem(null)}
+                      className="px-6 py-3 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-black uppercase tracking-widest hover:bg-apple-blue dark:hover:bg-apple-blue hover:text-white dark:hover:text-white transition-colors cursor-pointer shadow-lg shadow-black/10 dark:shadow-white/5"
+                    >
+                      Close Workspace
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function EssayBuilderView({ researchItems, content, setContent, isDrafting, setIsDrafting }: {
+function EssayBuilderView({ researchItems, content, setContent, isDrafting, setIsDrafting, addToast }: {
   researchItems: SavedResearch[],
   content: string,
   setContent: (v: string) => void,
   isDrafting: boolean,
-  setIsDrafting: (v: boolean) => void
+  setIsDrafting: (v: boolean) => void,
+  addToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const handleDraft = async () => {
     setIsDrafting(true);
@@ -903,8 +1320,9 @@ function EssayBuilderView({ researchItems, content, setContent, isDrafting, setI
       });
       const data = await res.json();
       setContent(data.answer);
+      addToast("Scholar Essay draft synthesized!", "success");
     } catch {
-      alert("Drafting failed.");
+      addToast("Drafting failed. Please verify connection.", "error");
     } finally {
       setIsDrafting(false);
     }
@@ -1074,6 +1492,8 @@ function SettingsView({
   personality: string,
   setPersonality: (p: any) => void
 }) {
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   return (
     <div className="flex-1 overflow-y-auto bg-apple-gray-50/30 dark:bg-black p-8">
       <div className="w-full space-y-12 pb-24">
@@ -1241,12 +1661,32 @@ function SettingsView({
                   <input type="file" accept=".scholar" onChange={importWorkspace} className="hidden" />
                 </label>
               </div>
-              <button 
-                onClick={onClearHistory}
-                className="w-full flex items-center justify-center gap-2 border border-red-500/20 text-red-500 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-500/5 transition-all"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Clear History
-              </button>
+              {showClearConfirm ? (
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      onClearHistory();
+                      setShowClearConfirm(false);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Confirm Clear
+                  </button>
+                  <button 
+                    onClick={() => setShowClearConfirm(false)}
+                    className="px-4 flex items-center justify-center border border-apple-gray-200 dark:border-white/10 dark:text-white py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-apple-gray-50 dark:hover:bg-[#151515] transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setShowClearConfirm(true)}
+                  className="w-full flex items-center justify-center gap-2 border border-red-500/20 text-red-500 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-500/5 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Clear History
+                </button>
+              )}
               <p className="text-[9px] text-apple-gray-400 font-bold uppercase tracking-widest text-center px-4 leading-relaxed">
                 ScholarMind data is only stored in your browser's private indexedDB/storage.
               </p>
